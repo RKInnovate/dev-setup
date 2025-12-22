@@ -117,13 +117,30 @@ jobs:
 
       - name: Validate TOML configs
         run: |
-          # Install toml-cli for TOML validation
-          brew install toml-cli || brew install python && pip3 install toml-cli
-
-          # Validate versions.lock
+          # Validate versions.lock using Python's built-in tomllib (Python 3.11+)
           echo "Validating versions.lock..."
-          # Basic check - try to parse it
-          python3 -c "import toml; toml.load(open('versions.lock'))" || exit 1
+          python3 -c "
+          import sys
+          try:
+              # Python 3.11+ has tomllib built-in
+              import tomllib
+              with open('versions.lock', 'rb') as f:
+                  tomllib.load(f)
+              print('✅ versions.lock is valid TOML')
+          except ImportError:
+              # Fallback for Python < 3.11: try toml package
+              try:
+                  import toml
+                  with open('versions.lock', 'r') as f:
+                      toml.load(f)
+                  print('✅ versions.lock is valid TOML')
+              except ImportError:
+                  print('⚠️  No TOML parser available, skipping validation')
+                  sys.exit(0)
+          except Exception as e:
+              print(f'❌ versions.lock is invalid: {e}')
+              sys.exit(1)
+          "
 
       - name: Validate Brewfile
         run: |

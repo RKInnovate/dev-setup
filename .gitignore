@@ -1,6 +1,6 @@
-# Binaries and executables
-devsetup
-devsetup-*
+# Binaries and executables (only in root, not cmd/devsetup directory)
+/devsetup
+/devsetup-*
 *.exe
 *.test
 *.out
