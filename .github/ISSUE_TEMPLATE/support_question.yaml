@@ -1,0 +1,39 @@
+name: "❓ Support / Question"
+description: "Ask for help with using the project, configuration, or setup issues."
+title: "[SUPPORT] "
+labels: ["support", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for usage questions, configuration help, or troubleshooting that is not a bug.
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      placeholder: "How to configure X with Y?"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / background
+      description: Where are you running this? What versions/config did you try?
+      placeholder: "I am using docker-compose on Ubuntu 22.04..."
+    validations:
+      required: true
+  - type: textarea
+    id: attempt
+    attributes:
+      label: What you tried
+      placeholder: "I tried ... but got ..."
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+  - type: input
+    id: contact
+    attributes:
+      label: Preferred contact (email / handle)
+      description: If maintainers need follow-up, how should we reach you?

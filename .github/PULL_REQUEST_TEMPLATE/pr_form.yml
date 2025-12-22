@@ -1,0 +1,155 @@
+name: "📦 Pull Request"
+description: "Submit a PR with structured details for review."
+title: "[PR] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # 📦 Pull Request
+        Thanks for contributing! Please fill in all required fields to ensure smooth review.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary (one line)
+      description: "e.g., feat(auth): add SSO login"
+      placeholder: "Short descriptive title"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: "What does this PR do? Why is it needed?"
+      placeholder: "Provide context for the change..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type_of_change
+    attributes:
+      label: Type of change
+      options:
+        - Bug fix
+        - New feature
+        - Breaking change
+        - Chore / refactor / documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: related_issues
+    attributes:
+      label: Related tickets / issues
+      description: "List related issue numbers, e.g., Closes #123"
+      placeholder: "Closes #123"
+    validations:
+      required: false
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: Proposed changes
+      description: "List key changes included in this PR."
+      placeholder: |
+        - Added ...
+        - Updated ...
+        - Removed ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_instructions
+    attributes:
+      label: How to test / QA
+      description: "Provide clear steps for reviewers/testers."
+      placeholder: |
+        1. Checkout branch...
+        2. Run tests...
+        3. Verify behavior...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist (required)
+      description: Ensure your PR meets these requirements.
+      options:
+        - label: Tests added/updated and passing locally
+        - label: Documentation updated (if applicable)
+        - label: Linting and formatting completed
+        - label: PR title follows repo conventions (e.g., conventional commits)
+        - label: No sensitive data or secrets are included
+    validations:
+      required: true
+
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout plan & backwards compatibility
+      description: "List deployment steps, flags, compatibility notes."
+      placeholder: "This change is backward compatible because..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: migrations
+    attributes:
+      label: Database migrations (if any)
+      description: "Describe any migrations and whether they are safe/additive."
+      placeholder: |
+        - Migration script: /sql/migrations/xxx.sql
+        - Up: ...
+        - Down: ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security considerations
+      description: "Does this PR affect auth, secrets, PII, or permissions?"
+      placeholder: |
+        - No sensitive data
+        - Touches auth: added validation...
+    validations:
+      required: false
+
+  - type: textarea
+    id: performance
+    attributes:
+      label: Performance considerations
+      description: "Any impact on speed, memory, or scaling?"
+      placeholder: "No measurable performance impact."
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / recordings
+      description: "If UI changed, include visuals."
+      placeholder: "Attach before/after screenshots..."
+    validations:
+      required: false
+
+  - type: input
+    id: changelog
+    attributes:
+      label: Changelog entry
+      description: "Short entry for release notes."
+      placeholder: "Added support for X in API Y"
+    validations:
+      required: false
+
+  - type: input
+    id: reviewers
+    attributes:
+      label: Suggested reviewers
+      description: "Tag team members or @teams as needed."
+      placeholder: "@your-team"
+    validations:
+      required: false

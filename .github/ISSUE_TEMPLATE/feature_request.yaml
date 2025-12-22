@@ -1,0 +1,53 @@
+name: "💡 Feature request"
+description: "Suggest an improvement or new feature — include the problem it solves."
+title: "[FEATURE] "
+labels: ["enhancement", "triage", "proposal"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe the use-case and why it's valuable.
+  - type: input
+    id: title_short
+    attributes:
+      label: Short summary
+      placeholder: "Add CSV export to reporting UI"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does this feature solve? Who benefits?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / design
+      description: How would you like this to work? Include examples, mockups or API changes.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternatives or workarounds you tried.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Business priority
+      options:
+        - "P0 — critical"
+        - "P1 — important"
+        - "P2 — nice-to-have"
+        - "P3 — low priority"
+    validations:
+      required: true
+  - type: input
+    id: contacts
+    attributes:
+      label: Contacts
+      description: Who requested this, who will be impacted, or what triggered this request?
+      placeholder: "team@example.com/in email from user@example.com"
