@@ -9,9 +9,10 @@
 .PHONY: all build install clean test lint help
 
 # Version info (injected at build time)
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+GIT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VERSION := $(GIT_TAG)+$(GIT_COMMIT)
+BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
 # Build flags
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.gitCommit=$(GIT_COMMIT)"

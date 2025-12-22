@@ -10,6 +10,7 @@ package installer
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,33 +19,62 @@ import (
 
 // mockUI implements UI interface for testing
 type mockUI struct {
+	mu    sync.Mutex
 	tasks []string
 	calls []string
 }
 
 func (m *mockUI) StartTask(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.tasks = append(m.tasks, name)
 	m.calls = append(m.calls, "StartTask:"+name)
 }
 
 func (m *mockUI) CompleteTask(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.calls = append(m.calls, "CompleteTask:"+name)
 }
 
 func (m *mockUI) FailTask(name string, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.calls = append(m.calls, "FailTask:"+name)
 }
 
 func (m *mockUI) Info(format string, args ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.calls = append(m.calls, "Info")
 }
 
 func (m *mockUI) Warning(format string, args ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.calls = append(m.calls, "Warning")
 }
 
 func (m *mockUI) Error(format string, args ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.calls = append(m.calls, "Error")
+}
+
+func (m *mockUI) getTasks() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.tasks))
+	copy(result, m.tasks)
+	return result
+}
+
+func (m *mockUI) getCalls() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.calls))
+	copy(result, m.calls)
+	return result
 }
 
 func TestParallelExecutor_ExecuteSequential(t *testing.T) {
@@ -67,8 +97,9 @@ func TestParallelExecutor_ExecuteSequential(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if len(ui.tasks) != 2 {
-		t.Errorf("Expected 2 tasks started, got %d", len(ui.tasks))
+	startedTasks := ui.getTasks()
+	if len(startedTasks) != 2 {
+		t.Errorf("Expected 2 tasks started, got %d", len(startedTasks))
 	}
 }
 
@@ -162,7 +193,8 @@ func TestParallelExecutor_Condition(t *testing.T) {
 
 	// Task should be skipped, so no completion call
 	hasComplete := false
-	for _, call := range ui.calls {
+	calls := ui.getCalls()
+	for _, call := range calls {
 		if call == "CompleteTask:Conditional Task" {
 			hasComplete = true
 		}
@@ -193,7 +225,8 @@ func TestParallelExecutor_Retry(t *testing.T) {
 
 	// Should see Info calls for retries
 	infoCount := 0
-	for _, call := range ui.calls {
+	calls := ui.getCalls()
+	for _, call := range calls {
 		if call == "Info" {
 			infoCount++
 		}

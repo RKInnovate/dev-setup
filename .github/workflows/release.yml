@@ -35,8 +35,11 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          GIT_TAG=${GITHUB_REF#refs/tags/}
+          GIT_SHA=$(git rev-parse --short HEAD)
+          VERSION="${GIT_TAG}+${GIT_SHA}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
       - name: Run tests
@@ -47,15 +50,18 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          GIT_SHA=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+
           # Darwin ARM64 (Apple Silicon)
           GOOS=darwin GOARCH=arm64 go build \
-            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD)" \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$BUILD_TIME -X main.gitCommit=$GIT_SHA" \
             -o devsetup-darwin-arm64 \
             ./cmd/devsetup
 
           # Darwin AMD64 (Intel Mac)
           GOOS=darwin GOARCH=amd64 go build \
-            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD)" \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$BUILD_TIME -X main.gitCommit=$GIT_SHA" \
             -o devsetup-darwin-amd64 \
             ./cmd/devsetup
 
