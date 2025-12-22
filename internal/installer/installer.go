@@ -102,7 +102,9 @@ func (i *Installer) RunStage(stageConfigPath string) error {
 		// Save state even on failure for resume capability
 		state.LastStage = stageConfigPath
 		state.LastUpdate = time.Now()
-		i.saveState(state)
+		if saveErr := i.saveState(state); saveErr != nil {
+			i.ui.Warning("Failed to save state: %v", saveErr)
+		}
 
 		return fmt.Errorf("stage execution failed: %w", err)
 	}

@@ -207,12 +207,12 @@ tasks:
           echo "Generated Starship config with nerd-font-symbols preset"
         else
           # Fallback: create minimal config
-          cat > "$STARSHIP_CONFIG" <<'EOF'
-# Starship prompt configuration
-[package]
-symbol = "📦 "
-display_private = true
-EOF
+          {
+            echo "# Starship prompt configuration"
+            echo "[package]"
+            echo "symbol = \"📦 \""
+            echo "display_private = true"
+          } > "$STARSHIP_CONFIG"
           echo "Created fallback Starship config"
         fi
       else
@@ -239,24 +239,24 @@ EOF
 
       # Add plugin sourcing if not already present
       if ! grep -q 'dev-setup/zsh-plugins' "$ZSHRC"; then
-        cat >> "$ZSHRC" <<'EOF'
-
-# Zsh plugins installed by dev-setup
-PLUGIN_DIR="${HOME}/.local/share/dev-setup/zsh-plugins"
-
-[ -f "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && \
-  source "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-
-[ -f "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && \
-  source "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
-
-[ -f "$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh" ] && \
-  source "$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh"
-
-# Enable completions
-fpath=($PLUGIN_DIR/zsh-completions/src $fpath)
-autoload -Uz compinit && compinit
-EOF
+        {
+          echo ""
+          echo "# Zsh plugins installed by dev-setup"
+          echo "PLUGIN_DIR=\"\${HOME}/.local/share/dev-setup/zsh-plugins\""
+          echo ""
+          echo "[ -f \"\$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh\" ] && \\"
+          echo "  source \"\$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh\""
+          echo ""
+          echo "[ -f \"\$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh\" ] && \\"
+          echo "  source \"\$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh\""
+          echo ""
+          echo "[ -f \"\$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh\" ] && \\"
+          echo "  source \"\$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh\""
+          echo ""
+          echo "# Enable completions"
+          echo "fpath=(\$PLUGIN_DIR/zsh-completions/src \$fpath)"
+          echo "autoload -Uz compinit && compinit"
+        } >> "$ZSHRC"
         echo "Added Zsh plugin configuration to .zshrc"
       else
         echo "Zsh plugins already configured"

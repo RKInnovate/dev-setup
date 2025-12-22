@@ -100,7 +100,7 @@ func (u *Updater) CheckForUpdate() (*ReleaseInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch release info: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
@@ -154,8 +154,8 @@ func (u *Updater) Update(release *ReleaseInfo) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	defer func() { _ = tempFile.Close() }()
 
 	if err := u.downloadFile(tempFile, asset.BrowserDownloadURL); err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
@@ -173,15 +173,21 @@ func (u *Updater) Update(release *ReleaseInfo) error {
 	}
 
 	// Atomic replace: close temp file, then move it
-	tempFile.Close()
+	_ = tempFile.Close()
 	if err := os.Rename(tempFile.Name(), currentExe); err != nil {
 		// Restore backup on failure
-		os.Rename(backupPath, currentExe)
+		if restoreErr := os.Rename(backupPath, currentExe); restoreErr != nil {
+			// Log but don't fail - original error is more important
+			fmt.Fprintf(os.Stderr, "Warning: failed to restore backup: %v\n", restoreErr)
+		}
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	// Remove backup on success
-	os.Remove(backupPath)
+	if err := os.Remove(backupPath); err != nil {
+		// Non-fatal: backup removal failure doesn't break update
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove backup: %v\n", err)
+	}
 
 	return nil
 }
@@ -196,7 +202,7 @@ func (u *Updater) downloadFile(dst io.Writer, url string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status %d", resp.StatusCode)
@@ -275,7 +281,7 @@ func VerifyChecksum(filepath, expectedChecksum string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {

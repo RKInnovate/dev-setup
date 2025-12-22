@@ -295,8 +295,14 @@ path = "~/test"
 
 	// Change to temp dir so LoadVersionsLock finds the file
 	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	defer func() {
+		if err := os.Chdir(origDir); err != nil {
+			t.Errorf("Failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
 
 	ui := &mockUI{}
 	installer := NewInstaller(ui, false)

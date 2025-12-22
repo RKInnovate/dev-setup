@@ -186,53 +186,53 @@ tasks:
     command: |
       NOTES="${HOME}/.local/share/dev-setup/POST_INSTALL.txt"
 
-      cat > "$NOTES" <<'EOF'
-╔════════════════════════════════════════════════════════════════════╗
-║                     POST-INSTALL NOTES                             ║
-╚════════════════════════════════════════════════════════════════════╝
-
-✅ Installation Complete!
-
-Your development environment is fully set up. Here are some final steps:
-
-1. Terminal Font:
-   • Switch to "Hack Nerd Font" for proper icon display
-   • iTerm2: Preferences → Profiles → Text → Font
-   • Terminal.app: Preferences → Profiles → Font
-
-2. Restart Terminal:
-   • Close and reopen terminal to load new shell configuration
-   • Or run: source ~/.zshrc
-
-3. Verify Installation:
-   • Run: devsetup verify
-   • Checks all tools are at correct versions
-
-4. Git Configuration (if not done):
-   • Set your name: git config --global user.name "Your Name"
-   • Set your email: git config --global user.email "your@email.com"
-   • Review templates: ~/.local/share/dev-setup/git-config/
-
-5. AI CLIs (if installed):
-   • Claude Code: claude auth
-   • Codex: codex login
-   • Gemini CLI: gemini login
-
-6. Flutter (if needed):
-   • Run: flutterw doctor
-   • Downloads Flutter SDK on first use
-
-7. Optional Tools:
-   • Docker Desktop: Launch from Applications folder
-   • Zed editor: Open from Applications or run: zed .
-
-For help: devsetup --help
-For verification: devsetup verify
-For health check: devsetup doctor
-
-Happy coding! 🚀
-
-EOF
+      printf '%s\n' \
+        "╔════════════════════════════════════════════════════════════════════╗" \
+        "║                     POST-INSTALL NOTES                             ║" \
+        "╚════════════════════════════════════════════════════════════════════╝" \
+        "" \
+        "✅ Installation Complete!" \
+        "" \
+        "Your development environment is fully set up. Here are some final steps:" \
+        "" \
+        "1. Terminal Font:" \
+        "   • Switch to \"Hack Nerd Font\" for proper icon display" \
+        "   • iTerm2: Preferences → Profiles → Text → Font" \
+        "   • Terminal.app: Preferences → Profiles → Font" \
+        "" \
+        "2. Restart Terminal:" \
+        "   • Close and reopen terminal to load new shell configuration" \
+        "   • Or run: source ~/.zshrc" \
+        "" \
+        "3. Verify Installation:" \
+        "   • Run: devsetup verify" \
+        "   • Checks all tools are at correct versions" \
+        "" \
+        "4. Git Configuration (if not done):" \
+        "   • Set your name: git config --global user.name \"Your Name\"" \
+        "   • Set your email: git config --global user.email \"your@email.com\"" \
+        "   • Review templates: ~/.local/share/dev-setup/git-config/" \
+        "" \
+        "5. AI CLIs (if installed):" \
+        "   • Claude Code: claude auth" \
+        "   • Codex: codex login" \
+        "   • Gemini CLI: gemini login" \
+        "" \
+        "6. Flutter (if needed):" \
+        "   • Run: flutterw doctor" \
+        "   • Downloads Flutter SDK on first use" \
+        "" \
+        "7. Optional Tools:" \
+        "   • Docker Desktop: Launch from Applications folder" \
+        "   • Zed editor: Open from Applications or run: zed ." \
+        "" \
+        "For help: devsetup --help" \
+        "For verification: devsetup verify" \
+        "For health check: devsetup doctor" \
+        "" \
+        "Happy coding! 🚀" \
+        "" \
+        > "$NOTES"
 
       echo "Created post-install notes at $NOTES"
       cat "$NOTES"

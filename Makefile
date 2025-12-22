@@ -59,7 +59,7 @@ test:
 lint:
 	@echo "Running linters..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
+		golangci-lint run ./... && \
 		echo "✅ Linting passed"; \
 	else \
 		echo "⚠️  golangci-lint not installed. Install with:"; \

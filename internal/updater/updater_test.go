@@ -64,7 +64,9 @@ func TestCheckForUpdate_NewerVersionAvailable(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(release)
+		if err := json.NewEncoder(w).Encode(release); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -87,7 +89,7 @@ func TestCheckForUpdate_NewerVersionAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var release ReleaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
@@ -109,7 +111,9 @@ func TestCheckForUpdate_AlreadyLatest(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(release)
+		if err := json.NewEncoder(w).Encode(release); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -131,7 +135,9 @@ func TestCheckForUpdate_SkipDraftRelease(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(release)
+		if err := json.NewEncoder(w).Encode(release); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -140,11 +146,16 @@ func TestCheckForUpdate_SkipDraftRelease(t *testing.T) {
 
 	// Manually test draft detection
 	req, _ := http.NewRequest("GET", server.URL, nil)
-	resp, _ := updater.httpClient.Do(req)
-	defer resp.Body.Close()
+	resp, err := updater.httpClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 
 	var release ReleaseInfo
-	json.NewDecoder(resp.Body).Decode(&release)
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
 
 	if !release.Draft {
 		t.Error("Expected draft=true")
@@ -160,7 +171,9 @@ func TestCheckForUpdate_SkipPrereleaseRelease(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(release)
+		if err := json.NewEncoder(w).Encode(release); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -168,11 +181,16 @@ func TestCheckForUpdate_SkipPrereleaseRelease(t *testing.T) {
 	updater.httpClient = server.Client()
 
 	req, _ := http.NewRequest("GET", server.URL, nil)
-	resp, _ := updater.httpClient.Do(req)
-	defer resp.Body.Close()
+	resp, err := updater.httpClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 
 	var release ReleaseInfo
-	json.NewDecoder(resp.Body).Decode(&release)
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
 
 	if !release.Prerelease {
 		t.Error("Expected prerelease=true")
@@ -190,7 +208,9 @@ func TestUpdate_SuccessfulUpdate(t *testing.T) {
 
 	// Create mock server for download
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("new version"))
+		if _, err := w.Write([]byte("new version")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -359,7 +379,9 @@ func TestVerifyChecksum_FileNotFound(t *testing.T) {
 func TestDownloadFile(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("downloaded content"))
+		if _, err := w.Write([]byte("downloaded content")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -372,7 +394,7 @@ func TestDownloadFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Download
 	if err := updater.downloadFile(file, server.URL); err != nil {
@@ -380,7 +402,7 @@ func TestDownloadFile(t *testing.T) {
 	}
 
 	// Verify content
-	file.Close()
+	_ = file.Close()
 	content, err := os.ReadFile(tmpFile)
 	if err != nil {
 		t.Fatalf("Failed to read downloaded file: %v", err)
@@ -402,7 +424,7 @@ func TestDownloadFile_ServerError(t *testing.T) {
 
 	tmpFile := filepath.Join(t.TempDir(), "download.bin")
 	file, _ := os.Create(tmpFile)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	err := updater.downloadFile(file, server.URL)
 	if err == nil {

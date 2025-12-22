@@ -34,10 +34,6 @@ const (
 	colorMagenta = "\033[35m"
 	colorCyan    = "\033[36m"
 	colorWhite   = "\033[37m"
-
-	// Background colors
-	bgGreen = "\033[42m"
-	bgRed   = "\033[41m"
 )
 
 // ProgressUI provides methods for rich terminal output
@@ -85,7 +81,7 @@ func (p *ProgressUI) PrintBanner() {
 ┃                                                    ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 `
-	fmt.Fprint(p.writer, colorCyan+banner+colorReset+"\n")
+	_, _ = fmt.Fprint(p.writer, colorCyan+banner+colorReset+"\n")
 }
 
 // StartStage indicates a new installation stage is beginning
@@ -104,7 +100,7 @@ func (p *ProgressUI) StartStage(name, estimatedTime string) {
 		colorBold+colorCyan, name, colorReset,
 		colorDim, estimatedTime, colorReset)
 
-	fmt.Fprint(p.writer, header)
+	_, _ = fmt.Fprint(p.writer, header)
 }
 
 // StartTask indicates a task is starting
@@ -116,7 +112,7 @@ func (p *ProgressUI) StartTask(taskName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	fmt.Fprintf(p.writer, "  %s⚡%s %s...\n", colorYellow, colorReset, taskName)
+	_, _ = fmt.Fprintf(p.writer, "  %s⚡%s %s...\n", colorYellow, colorReset, taskName)
 }
 
 // CompleteTask marks a task as successfully completed
@@ -128,7 +124,7 @@ func (p *ProgressUI) CompleteTask(taskName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	fmt.Fprintf(p.writer, "  %s✓%s %s\n", colorGreen, colorReset, taskName)
+	_, _ = fmt.Fprintf(p.writer, "  %s✓%s %s\n", colorGreen, colorReset, taskName)
 }
 
 // FailTask marks a task as failed
@@ -140,7 +136,7 @@ func (p *ProgressUI) FailTask(taskName string, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	fmt.Fprintf(p.writer, "  %s✗%s %s: %v\n", colorRed, colorReset, taskName, err)
+	_, _ = fmt.Fprintf(p.writer, "  %s✗%s %s: %v\n", colorRed, colorReset, taskName, err)
 }
 
 // Success prints a success message in green
@@ -153,7 +149,7 @@ func (p *ProgressUI) Success(format string, args ...interface{}) {
 	defer p.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(p.writer, "%s%s%s\n", colorGreen, message, colorReset)
+	_, _ = fmt.Fprintf(p.writer, "%s%s%s\n", colorGreen, message, colorReset)
 }
 
 // Error prints an error message in red
@@ -166,7 +162,7 @@ func (p *ProgressUI) Error(format string, args ...interface{}) {
 	defer p.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(p.writer, "%s%s%s\n", colorRed, message, colorReset)
+	_, _ = fmt.Fprintf(p.writer, "%s%s%s\n", colorRed, message, colorReset)
 }
 
 // Warning prints a warning message in yellow
@@ -179,7 +175,7 @@ func (p *ProgressUI) Warning(format string, args ...interface{}) {
 	defer p.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(p.writer, "%s%s%s\n", colorYellow, message, colorReset)
+	_, _ = fmt.Fprintf(p.writer, "%s%s%s\n", colorYellow, message, colorReset)
 }
 
 // Info prints an informational message in default color
@@ -192,7 +188,7 @@ func (p *ProgressUI) Info(format string, args ...interface{}) {
 	defer p.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(p.writer, "%s\n", message)
+	_, _ = fmt.Fprintf(p.writer, "%s\n", message)
 }
 
 // PrintProgress prints a progress bar
@@ -210,10 +206,10 @@ func (p *ProgressUI) PrintProgress(current, total int, label string) {
 
 	bar := strings.Repeat("█", filledWidth) + strings.Repeat("░", barWidth-filledWidth)
 
-	fmt.Fprintf(p.writer, "\r  [%s] %3.0f%% %s", bar, percentage, label)
+	_, _ = fmt.Fprintf(p.writer, "\r  [%s] %3.0f%% %s", bar, percentage, label)
 
 	if current == total {
-		fmt.Fprint(p.writer, "\n")
+		_, _ = fmt.Fprint(p.writer, "\n")
 	}
 }
 
@@ -226,7 +222,7 @@ func (p *ProgressUI) PrintElapsedTime() {
 	defer p.mu.Unlock()
 
 	elapsed := time.Since(p.startTime)
-	fmt.Fprintf(p.writer, "\n%s⏱  Total time: %v%s\n", colorDim, elapsed.Round(time.Second), colorReset)
+	_, _ = fmt.Fprintf(p.writer, "\n%s⏱  Total time: %v%s\n", colorDim, elapsed.Round(time.Second), colorReset)
 }
 
 // isTerminal checks if output is an interactive terminal

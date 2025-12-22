@@ -88,7 +88,7 @@ func LoadBrewfile(path string) (*Brewfile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Brewfile %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	brewfile := &Brewfile{
 		Taps:  []string{},
