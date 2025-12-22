@@ -13,11 +13,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rkinnovate/dev-setup/configs"
+	"github.com/rkinnovate/dev-setup/internal/config"
 	"github.com/rkinnovate/dev-setup/internal/installer"
 	"github.com/rkinnovate/dev-setup/internal/ui"
 	"github.com/rkinnovate/dev-setup/internal/updater"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	// Set the embedded filesystem in the config package
+	config.SetEmbeddedFS(configs.ConfigFS)
+}
 
 // version is set during build via -ldflags
 var version = "0.1.0-dev"

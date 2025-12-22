@@ -18,17 +18,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadStageConfig loads a stage configuration file from disk
+// LoadStageConfig loads a stage configuration file from disk or embedded filesystem
 // What: Reads YAML file and parses into StageConfig struct
 // Why: Stages are defined declaratively in YAML files
 // Params: path - filesystem path to stage YAML file
 // Returns: Parsed StageConfig struct and error if any
 // Example: cfg, err := LoadStageConfig("configs/stage1.yaml")
 func LoadStageConfig(path string) (*StageConfig, error) {
-	// Read file
+	// Try to read from filesystem first (for development)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read stage config %s: %w", path, err)
+		// If file not found on disk, try embedded filesystem
+		data, err = readEmbeddedFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read stage config %s (tried filesystem and embedded): %w", path, err)
+		}
 	}
 
 	// Parse YAML
