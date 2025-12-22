@@ -1,0 +1,291 @@
+# File: configs/stage2.yaml
+# Purpose: Stage 2 (Full Development Stack) - complete dev environment (runs in background)
+# Problem: Need additional dev tools, fonts, and utilities but shouldn't block initial coding
+# Role: Installs full dev stack while developer is already working (from Stage 1)
+# Usage: Automatically triggered after Stage 1 completes, runs in background
+# Design choices: Heavy parallelization (8+ concurrent); all tools optional (not blocking)
+# Assumptions: Stage 1 completed successfully; Homebrew available; ~/.local/share/dev-setup exists
+
+name: "Full Development Stack"
+timeout: 600s  # 10 minutes maximum
+
+# Enable parallel execution
+parallel: true
+
+tasks:
+  # Parallel group: Additional Homebrew formulas
+  - name: "Install git-lfs"
+    command: |
+      if brew ls --versions git-lfs >/dev/null 2>&1; then
+        echo "git-lfs already installed"
+      else
+        brew install git-lfs
+        git lfs install
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install wget"
+    command: |
+      if brew ls --versions wget >/dev/null 2>&1; then
+        echo "wget already installed"
+      else
+        brew install wget
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install starship prompt"
+    command: |
+      if brew ls --versions starship >/dev/null 2>&1; then
+        echo "starship already installed"
+      else
+        brew install starship
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install jq (JSON processor)"
+    command: |
+      if brew ls --versions jq >/dev/null 2>&1; then
+        echo "jq already installed"
+      else
+        brew install jq
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install ripgrep (fast grep)"
+    command: |
+      if brew ls --versions ripgrep >/dev/null 2>&1; then
+        echo "ripgrep already installed"
+      else
+        brew install ripgrep
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install fd (fast find)"
+    command: |
+      if brew ls --versions fd >/dev/null 2>&1; then
+        echo "fd already installed"
+      else
+        brew install fd
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install bat (better cat)"
+    command: |
+      if brew ls --versions bat >/dev/null 2>&1; then
+        echo "bat already installed"
+      else
+        brew install bat
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install eza (better ls)"
+    command: |
+      if brew ls --versions eza >/dev/null 2>&1; then
+        echo "eza already installed"
+      else
+        brew install eza
+      fi
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 60s
+
+  # Parallel group: Clone Zsh plugins
+  - name: "Clone zsh-completions"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/zsh-plugins/zsh-completions"
+      if [ -d "$DEST/.git" ]; then
+        echo "zsh-completions already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/zsh-users/zsh-completions "$DEST"
+      fi
+    parallel_group: "zsh-plugins"
+    required: false
+    timeout: 60s
+
+  - name: "Clone zsh-syntax-highlighting"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/zsh-plugins/zsh-syntax-highlighting"
+      if [ -d "$DEST/.git" ]; then
+        echo "zsh-syntax-highlighting already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting "$DEST"
+      fi
+    parallel_group: "zsh-plugins"
+    required: false
+    timeout: 60s
+
+  - name: "Clone zsh-autosuggestions"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/zsh-plugins/zsh-autosuggestions"
+      if [ -d "$DEST/.git" ]; then
+        echo "zsh-autosuggestions already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions "$DEST"
+      fi
+    parallel_group: "zsh-plugins"
+    required: false
+    timeout: 60s
+
+  - name: "Clone zsh-history-substring-search"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/zsh-plugins/zsh-history-substring-search"
+      if [ -d "$DEST/.git" ]; then
+        echo "zsh-history-substring-search already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/zsh-users/zsh-history-substring-search "$DEST"
+      fi
+    parallel_group: "zsh-plugins"
+    required: false
+    timeout: 60s
+
+  # Parallel group: Clone custom repos
+  - name: "Clone flutter-wrapper"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/flutter-wrapper"
+      if [ -d "$DEST/.git" ]; then
+        echo "flutter-wrapper already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/BadRat-in/flutter-wrapper "$DEST"
+      fi
+
+      # Create flutterw symlink
+      ln -sf "$DEST/bin/flutter" "${HOME}/.local/bin/flutterw"
+      echo "Created flutterw symlink"
+    parallel_group: "custom-repos"
+    required: false
+    timeout: 90s
+
+  - name: "Clone git-config"
+    command: |
+      DEST="${HOME}/.local/share/dev-setup/git-config"
+      if [ -d "$DEST/.git" ]; then
+        echo "git-config already cloned"
+        git -C "$DEST" pull --ff-only
+      else
+        mkdir -p "$(dirname "$DEST")"
+        git clone --depth=1 https://github.com/BadRat-in/git-config "$DEST"
+      fi
+      echo "Review git config at $DEST before applying to ~/.gitconfig"
+    parallel_group: "custom-repos"
+    required: false
+    timeout: 60s
+
+  # Sequential: Configure Starship prompt
+  - name: "Configure Starship prompt"
+    command: |
+      STARSHIP_CONFIG="${HOME}/.config/starship.toml"
+      mkdir -p "$(dirname "$STARSHIP_CONFIG")"
+
+      if [ ! -f "$STARSHIP_CONFIG" ]; then
+        # Generate config with nerd-font-symbols preset
+        if command -v starship >/dev/null 2>&1; then
+          starship preset nerd-font-symbols -o "$STARSHIP_CONFIG"
+          echo "Generated Starship config with nerd-font-symbols preset"
+        else
+          # Fallback: create minimal config
+          cat > "$STARSHIP_CONFIG" <<'EOF'
+# Starship prompt configuration
+[package]
+symbol = "📦 "
+display_private = true
+EOF
+          echo "Created fallback Starship config"
+        fi
+      else
+        echo "Starship config already exists"
+      fi
+
+      # Ensure display_private = true in [package] section
+      if ! grep -q 'display_private = true' "$STARSHIP_CONFIG"; then
+        echo "" >> "$STARSHIP_CONFIG"
+        echo "[package]" >> "$STARSHIP_CONFIG"
+        echo "display_private = true" >> "$STARSHIP_CONFIG"
+        echo "Added display_private = true to Starship config"
+      fi
+    required: false
+    timeout: 30s
+
+  # Sequential: Configure Zsh to source plugins
+  - name: "Configure Zsh plugins"
+    command: |
+      ZSHRC="${HOME}/.zshrc"
+
+      # Create .zshrc if it doesn't exist
+      touch "$ZSHRC"
+
+      # Add plugin sourcing if not already present
+      if ! grep -q 'dev-setup/zsh-plugins' "$ZSHRC"; then
+        cat >> "$ZSHRC" <<'EOF'
+
+# Zsh plugins installed by dev-setup
+PLUGIN_DIR="${HOME}/.local/share/dev-setup/zsh-plugins"
+
+[ -f "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && \
+  source "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+
+[ -f "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && \
+  source "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
+
+[ -f "$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh" ] && \
+  source "$PLUGIN_DIR/zsh-history-substring-search/zsh-history-substring-search.zsh"
+
+# Enable completions
+fpath=($PLUGIN_DIR/zsh-completions/src $fpath)
+autoload -Uz compinit && compinit
+EOF
+        echo "Added Zsh plugin configuration to .zshrc"
+      else
+        echo "Zsh plugins already configured"
+      fi
+
+      # Add Starship init if not present
+      if ! grep -q 'starship init zsh' "$ZSHRC"; then
+        echo "" >> "$ZSHRC"
+        echo '# Starship prompt' >> "$ZSHRC"
+        echo 'eval "$(starship init zsh)"' >> "$ZSHRC"
+        echo "Added Starship init to .zshrc"
+      fi
+    required: false
+    timeout: 10s
+
+post_stage:
+  message: |
+
+    ✅ Stage 2 complete! Full development stack ready.
+
+    Installed tools:
+      • git-lfs, wget, jq
+      • ripgrep, fd, bat, eza (modern CLI tools)
+      • Starship prompt (configured)
+      • Zsh plugins (syntax highlighting, autosuggestions, history search)
+      • Flutter wrapper (use: flutterw)
+      • Git config templates
+
+    Stage 3 (Polish & Optional Tools) is starting in background...
+
+  next_stage: "configs/stage3.yaml"
+  blocking: false  # Stage 3 runs in background

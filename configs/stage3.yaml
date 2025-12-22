@@ -1,0 +1,259 @@
+# File: configs/stage3.yaml
+# Purpose: Stage 3 (Polish & Optional Tools) - fonts, AI CLIs, and optional tools
+# Problem: Additional tools enhance productivity but aren't essential for basic coding
+# Role: Installs nice-to-have tools for polished professional environment
+# Usage: Automatically triggered after Stage 2, runs in background (can be skipped with --skip-optional)
+# Design choices: All tasks optional (required=false); heavy parallelization; longer timeout
+# Assumptions: Stages 1 & 2 completed; developer is already working; these installs won't disrupt work
+
+name: "Polish & Optional Tools"
+timeout: 900s  # 15 minutes maximum
+
+# Enable parallel execution
+parallel: true
+
+tasks:
+  # Parallel group: Install fonts (requires cask-fonts tap)
+  - name: "Add Homebrew cask-fonts tap"
+    command: |
+      if brew tap | grep -q '^homebrew/cask-fonts$'; then
+        echo "cask-fonts tap already added"
+      else
+        brew tap homebrew/cask-fonts
+      fi
+    parallel_group: "fonts"
+    required: false
+    timeout: 30s
+
+  - name: "Install Hack Nerd Font"
+    command: |
+      if brew list --cask font-hack-nerd-font >/dev/null 2>&1; then
+        echo "Hack Nerd Font already installed"
+      else
+        brew install --cask font-hack-nerd-font
+        echo ""
+        echo "Note: Switch terminal font to 'Hack Nerd Font' in terminal settings"
+        echo "  iTerm2: Preferences → Profiles → Text → Font"
+        echo "  Terminal.app: Preferences → Profiles → Font"
+      fi
+    parallel_group: "fonts"
+    required: false
+    timeout: 120s
+    condition: "brew tap | grep -q '^homebrew/cask-fonts$'"
+
+  # Parallel group: Optional AI CLIs (best-effort, may not be available)
+  - name: "Install Claude Code CLI (if available)"
+    command: |
+      # Try anthropic/claude tap first
+      if ! brew tap | grep -q 'anthropic/claude'; then
+        brew tap anthropic/claude 2>/dev/null || true
+      fi
+
+      # Try to install
+      if brew info --cask claude-code >/dev/null 2>&1; then
+        if brew list --cask claude-code >/dev/null 2>&1; then
+          echo "Claude Code already installed"
+        else
+          brew install --cask claude-code
+          echo "Run 'claude auth' to authenticate"
+        fi
+      elif brew info --formula claude-code >/dev/null 2>&1; then
+        if brew ls --versions claude-code >/dev/null 2>&1; then
+          echo "Claude Code already installed"
+        else
+          brew install claude-code
+          echo "Run 'claude auth' to authenticate"
+        fi
+      else
+        echo "Claude Code not available via Homebrew (skipped)"
+        exit 0
+      fi
+    parallel_group: "ai-clis"
+    required: false
+    timeout: 180s
+
+  - name: "Install Codex CLI (if available)"
+    command: |
+      if brew info --formula codex >/dev/null 2>&1; then
+        if brew ls --versions codex >/dev/null 2>&1; then
+          echo "Codex already installed"
+        else
+          brew install codex
+          echo "Run 'codex login' to authenticate"
+        fi
+      elif brew info --cask codex >/dev/null 2>&1; then
+        if brew list --cask codex >/dev/null 2>&1; then
+          echo "Codex already installed"
+        else
+          brew install --cask codex
+          echo "Run 'codex login' to authenticate"
+        fi
+      else
+        echo "Codex not available via Homebrew (skipped)"
+        exit 0
+      fi
+    parallel_group: "ai-clis"
+    required: false
+    timeout: 180s
+
+  - name: "Install Gemini CLI (if available)"
+    command: |
+      if brew info --formula gemini-cli >/dev/null 2>&1; then
+        if brew ls --versions gemini-cli >/dev/null 2>&1; then
+          echo "Gemini CLI already installed"
+        else
+          brew install gemini-cli
+          echo "Run 'gemini login' to authenticate"
+        fi
+      elif brew info --cask gemini-cli >/dev/null 2>&1; then
+        if brew list --cask gemini-cli >/dev/null 2>&1; then
+          echo "Gemini CLI already installed"
+        else
+          brew install --cask gemini-cli
+          echo "Run 'gemini login' to authenticate"
+        fi
+      else
+        echo "Gemini CLI not available via Homebrew (skipped)"
+        exit 0
+      fi
+    parallel_group: "ai-clis"
+    required: false
+    timeout: 180s
+
+  # Parallel group: Docker and container tools (optional, large downloads)
+  - name: "Install Docker Desktop (if desired)"
+    command: |
+      if brew list --cask docker >/dev/null 2>&1; then
+        echo "Docker already installed"
+      else
+        echo "Installing Docker Desktop (large download, may take a while)..."
+        brew install --cask docker
+        echo "Launch Docker Desktop from Applications to complete setup"
+      fi
+    parallel_group: "containers"
+    required: false
+    timeout: 300s
+
+  # Parallel group: Additional development tools
+  - name: "Install fzf (fuzzy finder)"
+    command: |
+      if brew ls --versions fzf >/dev/null 2>&1; then
+        echo "fzf already installed"
+      else
+        brew install fzf
+        # Install shell integration
+        $(brew --prefix)/opt/fzf/install --key-bindings --completion --no-update-rc 2>/dev/null || true
+      fi
+    parallel_group: "dev-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install tree (directory listing)"
+    command: |
+      if brew ls --versions tree >/dev/null 2>&1; then
+        echo "tree already installed"
+      else
+        brew install tree
+      fi
+    parallel_group: "dev-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install htop (process monitor)"
+    command: |
+      if brew ls --versions htop >/dev/null 2>&1; then
+        echo "htop already installed"
+      else
+        brew install htop
+      fi
+    parallel_group: "dev-tools"
+    required: false
+    timeout: 60s
+
+  - name: "Install tldr (simplified man pages)"
+    command: |
+      if brew ls --versions tldr >/dev/null 2>&1; then
+        echo "tldr already installed"
+      else
+        brew install tldr
+      fi
+    parallel_group: "dev-tools"
+    required: false
+    timeout: 60s
+
+  # Sequential: Create post-install notes
+  - name: "Create post-install notes"
+    command: |
+      NOTES="${HOME}/.local/share/dev-setup/POST_INSTALL.txt"
+
+      cat > "$NOTES" <<'EOF'
+╔════════════════════════════════════════════════════════════════════╗
+║                     POST-INSTALL NOTES                             ║
+╚════════════════════════════════════════════════════════════════════╝
+
+✅ Installation Complete!
+
+Your development environment is fully set up. Here are some final steps:
+
+1. Terminal Font:
+   • Switch to "Hack Nerd Font" for proper icon display
+   • iTerm2: Preferences → Profiles → Text → Font
+   • Terminal.app: Preferences → Profiles → Font
+
+2. Restart Terminal:
+   • Close and reopen terminal to load new shell configuration
+   • Or run: source ~/.zshrc
+
+3. Verify Installation:
+   • Run: devsetup verify
+   • Checks all tools are at correct versions
+
+4. Git Configuration (if not done):
+   • Set your name: git config --global user.name "Your Name"
+   • Set your email: git config --global user.email "your@email.com"
+   • Review templates: ~/.local/share/dev-setup/git-config/
+
+5. AI CLIs (if installed):
+   • Claude Code: claude auth
+   • Codex: codex login
+   • Gemini CLI: gemini login
+
+6. Flutter (if needed):
+   • Run: flutterw doctor
+   • Downloads Flutter SDK on first use
+
+7. Optional Tools:
+   • Docker Desktop: Launch from Applications folder
+   • Zed editor: Open from Applications or run: zed .
+
+For help: devsetup --help
+For verification: devsetup verify
+For health check: devsetup doctor
+
+Happy coding! 🚀
+
+EOF
+
+      echo "Created post-install notes at $NOTES"
+      cat "$NOTES"
+    required: false
+    timeout: 10s
+
+post_stage:
+  message: |
+
+    🎉 Stage 3 complete! Professional environment fully ready.
+
+    Installed:
+      • Hack Nerd Font (switch terminal font)
+      • AI CLIs (authenticate with respective services)
+      • Docker Desktop (launch from Applications)
+      • Modern dev tools (fzf, tree, htop, tldr)
+
+    Post-install notes: ~/.local/share/dev-setup/POST_INSTALL.txt
+
+    Your development environment is complete!
+    Total installation time: Check with 'devsetup status'
+
+  next_stage: ""
+  blocking: false

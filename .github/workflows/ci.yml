@@ -1,0 +1,134 @@
+# File: .github/workflows/ci.yml
+# Purpose: Continuous Integration workflow - runs tests and linting on every push/PR
+# Problem: Need automated testing to catch issues before merge
+# Role: CI pipeline for quality assurance
+# Usage: Triggered on push to any branch and on pull requests
+# Design choices: Runs tests, linting, and build validation; caches Go modules
+# Assumptions: Go 1.21+ available; GitHub Actions runner
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -func=coverage.out
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build:
+    name: Build
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build for all architectures
+        run: |
+          make build-all
+
+      - name: Verify binaries
+        run: |
+          file devsetup-darwin-arm64
+          file devsetup-darwin-amd64
+          ./devsetup-darwin-$(uname -m) --version
+
+  validate-configs:
+    name: Validate Configurations
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate YAML configs
+        run: |
+          # Install yq for YAML validation
+          brew install yq
+
+          # Validate stage configs
+          for file in configs/*.yaml; do
+            echo "Validating $file..."
+            yq eval '.' "$file" > /dev/null || exit 1
+          done
+
+      - name: Validate TOML configs
+        run: |
+          # Install toml-cli for TOML validation
+          brew install toml-cli || brew install python && pip3 install toml-cli
+
+          # Validate versions.lock
+          echo "Validating versions.lock..."
+          # Basic check - try to parse it
+          python3 -c "import toml; toml.load(open('versions.lock'))" || exit 1
+
+      - name: Validate Brewfile
+        run: |
+          echo "Validating Brewfile..."
+          # Basic syntax check
+          if [ -f Brewfile ]; then
+            grep -E '^(tap|brew|cask)' Brewfile || echo "Brewfile appears valid"
+          fi

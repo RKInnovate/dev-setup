@@ -1,0 +1,60 @@
+# Binaries and executables
+devsetup
+devsetup-*
+*.exe
+*.test
+*.out
+
+# Go build artifacts
+*.a
+*.o
+*.so
+
+# Go test coverage
+coverage.out
+*.coverprofile
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# State and cache directories
+.local/
+.cache/
+
+# Backup files
+*.backup
+*.bak
+
+# Log files
+*.log
+
+# Environment files (may contain secrets)
+.env
+.env.local
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Homebrew
+Brewfile.lock.json
+
+# Build directories
+build/
+dist/
+bin/
+
+# Go module cache (local development)
+vendor/

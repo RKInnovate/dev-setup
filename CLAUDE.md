@@ -9,11 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Zero tolerance for "it works on my machine" excuses.**
 
 This repository ensures **exact environment replication** across all developer machines through:
-- Automated, idempotent installation scripts
+- Automated, three-stage progressive setup (5min critical → 10min full → 15min polish)
+- Parallel task execution (8+ concurrent tasks) for maximum speed
+- Version-locked dependencies (Brewfile.lock.json + versions.lock)
 - Strict package manager enforcement (pnpm for Node.js, uv for Python)
-- Version-locked dependencies and state tracking
-- Standardized shell configuration and tooling
-- Mandatory pre-commit hooks and CI checks
+- Self-updating binary with GitHub releases
+- Comprehensive verification and diagnostics
 
 ---
 
@@ -21,17 +22,15 @@ This repository ensures **exact environment replication** across all developer m
 
 Before creating **any commits or pull requests**, you MUST review and comply with:
 
-1. **`.git/hooks/commit-msg`** (line 1-140 in this repo)
+1. **`.git/hooks/commit-msg`**
    - Enforces Conventional Commits format
    - Validates type, scope, subject format
-   - Checks subject length (10-72 chars), lowercase start, no trailing period
-   - Validates `BREAKING CHANGE:` format if present
    - **Commit messages MUST pass this hook without modification**
 
-2. **`.github/workflows/pr_checks.yml`** (if exists)
-   - Defines CI checks, linting, tests required for PRs
-   - All generated code must pass these checks
-   - **Code that fails CI is NOT ready for commit**
+2. **`.github/workflows/ci.yml`** and **`.github/workflows/release.yml`**
+   - CI: Runs tests, linting, build validation on every push/PR
+   - Release: Automates binary builds and GitHub releases on version tags
+   - All code must pass CI checks before merge
 
 3. **`global_conf/` directory** - Organization-wide development standards:
    - `claude.md` - Mandatory engineering standards
@@ -52,6 +51,7 @@ Before creating **any commits or pull requests**, you MUST review and comply wit
 |----------|--------------------------|----------|
 | **Python** | **`uv`** | `uv.lock` |
 | **Node.js (JS/TS)** | **`pnpm`** | `pnpm-lock.yaml` |
+| **Go** | **`go mod`** | `go.sum` |
 
 ### FORBIDDEN Package Managers
 
@@ -59,6 +59,7 @@ Before creating **any commits or pull requests**, you MUST review and comply wit
 
 - **Python**: `pip`, `pipenv`, `poetry`, `conda`
 - **Node.js**: `npm`, `yarn`, `bun`
+- **Go**: Manual vendor management without go.mod
 
 ### Rules
 
@@ -66,113 +67,204 @@ Before creating **any commits or pull requests**, you MUST review and comply wit
    - **STOP immediately**
    - **Explicitly warn** that this is **NOT ALLOWED**
    - **DO NOT generate commands or configuration** for incorrect tools
-   - Guide user to correct package manager (`uv` or `pnpm`)
+   - Guide user to correct package manager (`uv`, `pnpm`, or `go mod`)
 
 2. **Never mix package managers** in the same project or commit
 
 3. **Lockfiles must match** the chosen package manager
 
-4. **Installation commands:**
-   ```bash
-   # Python - ONLY use uv
-   uv pip install <package>
-   uv sync
-
-   # Node.js - ONLY use pnpm
-   pnpm install
-   pnpm add <package>
-   ```
-
 ---
 
 ## 🔧 Project Overview
 
-This is a **macOS-only** development environment bootstrap tool that automates installation of a standardized dev stack using Homebrew. The single entrypoint script (`setup.sh`) provisions tools, editors, fonts, and shell enhancements with **idempotent, version-aware installation logic**.
+This is a **macOS development environment bootstrap tool** written in Go that reduces developer setup time from **days to 30 minutes** (productive in just 5 minutes!). It uses a three-stage progressive installation approach with parallel task execution.
 
-### Key Components
+### Key Technology Stack
 
-- **`setup.sh`**: Main bootstrap script (440 lines)
-- **`zsh/dev-setup.zsh`**: Portable Zsh profile template
-- **`tests/test_setup.sh`**: Stubbed regression tests (no network, safe to run)
-- **State directory**: `~/.local/share/dev-setup/` (version marker, cloned repos, plugins)
-- **Shims directory**: `~/.local/bin/` (exposed executables like `flutterw`)
+- **Language**: Go 1.21+
+- **CLI Framework**: Cobra (professional CLI with subcommands)
+- **Configuration**: YAML (stage configs) + TOML (version locking)
+- **Deployment**: Single binary, auto-updates via GitHub releases
+- **CI/CD**: GitHub Actions (tests, linting, releases)
+- **Package Manager**: Homebrew (for macOS tools)
 
 ### What Gets Installed
 
-- Homebrew (if missing) + core formulas: git, node, pnpm, git-lfs, wget
-- uv (Python toolchain manager) via official installer
-- Zed editor (cask)
-- Starship prompt with Hack Nerd Font
-- Flutter wrapper (`flutterw` shim)
-- Git config helper repo (manual application)
-- Zsh plugins (completions, syntax highlighting, autosuggestions, history search)
-- Optional AI CLIs: Codex, Gemini CLI, Claude Code (best-effort)
+**Stage 1 (5 min, blocking - developer productive):**
+- Homebrew + Git, Node, pnpm, Python, uv
+- Zed editor
+- Essential CLI tools
+
+**Stage 2 (10 min, background - full stack):**
+- Flutter wrapper (`flutterw`)
+- Zsh plugins (completions, syntax highlighting, etc.)
+- Starship prompt
+- Development utilities
+
+**Stage 3 (15 min, background - polish):**
+- Fonts (Hack Nerd Font)
+- AI CLIs (Codex, Gemini, Claude)
+- Docker and optional tools
 
 ---
 
 ## 🚀 Key Commands
 
-### Bootstrap Installation
-```bash
-./setup.sh
-```
-- Installs all dependencies
-- Updates cloned repos if already present
-- Records version state in `~/.local/share/dev-setup/version`
-- **Safe to re-run**: Skips existing tools (idempotent)
-- **macOS only**: Exits with error on non-Darwin systems
+### Build & Run
 
-### Testing (Safe, No Network)
 ```bash
-bash tests/test_setup.sh
-```
-- Uses temporary HOME and stubbed tools (brew, git, curl, starship, uv)
-- Validates version recording and Starship config patching
-- Leaves no state after completion
+# Build binary
+make build
 
-### Linting
-```bash
-shellcheck setup.sh
+# Build for all architectures
+make build-all
+
+# Install to /usr/local/bin
+make install
+
+# Run without installing
+make run
 ```
-**Required before committing any shell script changes.**
+
+### Testing & Quality
+
+```bash
+# Run all tests
+make test
+
+# Run linter
+make lint
+
+# Run with verbose output
+go test -v ./...
+
+# Run specific test
+go test ./internal/installer -run TestParallelExecutor -v
+
+# Check test coverage
+go test -v -race -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+### Using devsetup
+
+```bash
+# Install development environment
+devsetup install
+
+# Fast mode (Stage 1 only - 5 minutes)
+devsetup install --fast
+
+# Skip optional tools (Stages 1-2 only)
+devsetup install --skip-optional
+
+# Dry run (see what would be installed)
+devsetup install --dry-run
+
+# Verify environment matches versions.lock
+devsetup verify
+devsetup verify --fix  # Auto-fix mismatches
+
+# Run diagnostics
+devsetup doctor
+
+# Check installation status
+devsetup status
+
+# Update devsetup binary
+devsetup update
+devsetup update --check  # Check without installing
+
+# Show version
+devsetup --version
+```
+
+### One-Line Install (for end users)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rkinnovate/dev-setup/main/bootstrap.sh | bash
+```
 
 ---
 
 ## 🏗️ Architecture Deep Dive
 
-### Core Design Principles (setup.sh)
+### Project Structure
 
-1. **Idempotency**: All install functions check existence before acting
-   - `install_formula()` checks `brew ls --versions` before installing
-   - `install_cask()` checks `brew list --cask` before installing
-   - `clone_or_update()` fast-forwards existing repos or clones new ones
+```
+dev-setup/
+├── cmd/devsetup/              # CLI entry point
+│   └── main.go               # Cobra commands (install, verify, doctor, update)
+├── internal/                  # Internal packages (not importable)
+│   ├── config/               # Configuration loading and validation
+│   │   ├── models.go        # Data structures (StageConfig, Task, VersionsLock)
+│   │   ├── loader.go        # YAML/TOML parsers
+│   │   └── loader_test.go   # Config tests
+│   ├── installer/            # Installation orchestration
+│   │   ├── installer.go     # High-level stage management
+│   │   ├── parallel.go      # Parallel task execution engine
+│   │   ├── installer_test.go
+│   │   └── parallel_test.go
+│   ├── updater/              # Self-update functionality
+│   │   ├── updater.go       # GitHub releases integration
+│   │   └── updater_test.go
+│   └── ui/                   # Terminal UI (progress bars, colors)
+│       └── progress.go
+├── configs/                   # Stage configuration files
+│   ├── stage1.yaml          # Critical path (5 min)
+│   ├── stage2.yaml          # Full stack (10 min)
+│   └── stage3.yaml          # Polish (15 min)
+├── .github/workflows/         # CI/CD pipelines
+│   ├── ci.yml               # Tests, linting, builds
+│   └── release.yml          # Automated releases
+├── Brewfile                   # Homebrew package declarations
+├── versions.lock              # Version pinning (TOML)
+├── bootstrap.sh               # One-line installer script
+├── Makefile                   # Build automation
+├── go.mod / go.sum            # Go dependencies
+├── README.md                  # User documentation
+├── CONTRIBUTING.md            # Developer guide
+└── CLAUDE.md                  # This file
 
-2. **Version Tracking**: Records `DEV_SETUP_VERSION` (line 13) in state file
-   - First run: Creates `~/.local/share/dev-setup/version`
-   - Re-run: Detects version, logs scenario (first-run/update/re-run)
-   - Update detection: Compares previous version with current
+```
 
-3. **Error Handling**: `set -euo pipefail` (line 2)
-   - `error()` helper (lines 35-38) exits on critical failures
-   - Validates macOS-only with `require_macos()` (lines 46-50)
+### Core Design Principles
 
-4. **State Isolation**: User-level paths prevent system pollution
-   - State: `~/.local/share/dev-setup/`
-   - Bins: `~/.local/bin/`
-   - Config: `~/.config/starship.toml`
+1. **Three-Stage Progressive Setup**
+   - Stage 1: Developer can start coding after 5 minutes
+   - Stages 2-3: Complete in background while developer works
+   - Minimizes time-to-productivity
 
-### Critical Functions Reference
+2. **Parallel Task Execution**
+   - Tasks in same `parallel_group` run concurrently
+   - Semaphore pattern limits concurrency (max 8 concurrent)
+   - Sequential tasks run one at a time
+   - Goroutines + channels for coordination
 
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `main()` | 412-440 | Orchestrates install flow in dependency order |
-| `install_brew()` | 99-120 | Installs Homebrew, wires shellenv to `~/.zprofile` |
-| `install_formula()` | 128-137 | Idempotent brew formula installer |
-| `install_cask()` | 145-153 | Idempotent brew cask installer |
-| `clone_or_update()` | 181-194 | Clone repo or fast-forward existing |
-| `link_bin()` | 202-208 | Symlink executables to `~/.local/bin` |
-| `ensure_starship_config()` | 283-332 | Create/patch starship config (sets `display_private=true`, avoids duplicate `[package]` blocks) |
-| `install_optional_ai_clis()` | 351-379 | Best-effort AI CLI installs, graceful skip if unavailable |
+3. **Version Locking**
+   - `Brewfile.lock.json`: Locks Homebrew package versions
+   - `versions.lock`: TOML file for git repos and tools
+   - Ensures identical versions across all machines
+
+4. **Idempotency**
+   - All operations safe to re-run
+   - Checks existence before installing
+   - Updates existing installations
+
+5. **Self-Updating**
+   - Checks GitHub releases for new versions
+   - Downloads and atomically replaces binary
+   - Preserves backup of old version
+
+### Key Packages Reference
+
+| Package | Purpose |
+|---------|---------|
+| `cmd/devsetup` | CLI entry point with Cobra commands |
+| `internal/config` | Configuration loading (YAML, TOML, Brewfile) |
+| `internal/installer` | Stage orchestration and parallel execution |
+| `internal/updater` | Self-update via GitHub releases |
+| `internal/ui` | Rich terminal UI (progress bars, colors) |
 
 ### State & Path Locations
 
@@ -182,10 +274,9 @@ shellcheck setup.sh
 │   └── flutterw -> ../share/dev-setup/flutter-wrapper/bin/flutter
 ├── share/
 │   └── dev-setup/                # State directory
-│       ├── version               # Version marker (DEV_SETUP_VERSION)
-│       ├── POST_INSTALL.txt      # Manual steps after bootstrap
-│       ├── flutter-wrapper/      # Cloned from BadRat-in/flutter-wrapper
-│       ├── git-config/           # Cloned from BadRat-in/git-config (manual apply)
+│       ├── state.json            # Installation state
+│       ├── flutter-wrapper/      # Cloned from rkinnovate/flutter-wrapper
+│       ├── git-config/           # Cloned from rkinnovate/git-config
 │       └── zsh-plugins/          # Cloned Zsh plugins
 │           ├── zsh-completions/
 │           ├── zsh-syntax-highlighting/
@@ -194,21 +285,7 @@ shellcheck setup.sh
 │           ├── zsh-interactive-cd/
 │           └── zsh-you-should-use/
 ~/.config/
-└── starship.toml                 # Starship config (patched by script)
-```
-
-### Zsh Profile Template (zsh/dev-setup.zsh)
-
-Portable snippet for sourcing from `~/.zshrc`. Provides:
-- Homebrew shellenv wiring (Intel/Apple Silicon detection)
-- Starship prompt initialization
-- PATH setup (flutter-wrapper, standard bins)
-- Zsh plugin sourcing (prefers `~/.local/share/dev-setup/zsh-plugins/`)
-- Git shortcuts and aliases
-
-**Usage:** Add to `~/.zshrc`:
-```zsh
-source /path/to/repo/zsh/dev-setup.zsh
+└── starship.toml                 # Starship prompt config
 ```
 
 ---
@@ -228,13 +305,7 @@ feat/3-add-login-api
 fix/7-null-pointer-dashboard
 chore/12-update-deps
 feat/3-4-add-reporting-endpoints  # Multiple issues
-hotfix/15-critical-security-patch
 ```
-
-**Rules:**
-- Use **issue numbers** (no `#`), joined by hyphens for multiple issues
-- Keep descriptions **short and descriptive** (avoid generic words like "update")
-- **hotfix/** for urgent changes requiring immediate merge
 
 ### Commit Message Format (Conventional Commits - ENFORCED)
 
@@ -247,82 +318,32 @@ hotfix/15-critical-security-patch
 <footer(s)> (optional)
 ```
 
-**Type:** Same as branch types (lowercase)
-**Scope:** Optional, short module/area identifier (e.g., `auth`, `api`, `ui`)
-**Subject:**
-- Imperative mood, present tense
-- Lowercase start (enforced by hook)
-- 10-72 characters (enforced by hook)
-- No trailing period (enforced by hook)
-
-**Body:** Explain **what and why** (not how), wrap at ~72 chars
-
-**Footer:**
-- Issue references: `Fixes #3` or `Fixes #3, #4` (auto-closes on merge)
-- Breaking changes: `BREAKING CHANGE: <description>`
+**Rules:**
+- Type: Same as branch types (lowercase)
+- Scope: Optional module/area (e.g., `installer`, `config`, `updater`)
+- Subject: Imperative mood, lowercase start, 10-72 chars, no trailing period
+- Body: Explain what and why (not how)
+- Footer: Issue references (`Fixes #N`) or `BREAKING CHANGE:`
 
 **Examples:**
 
 ✅ **GOOD:**
 ```
-feat(auth): add JWT login endpoint
+feat(installer): add parallel task execution
 
-Adds /auth/login endpoint using JWT for stateless sessions.
-This implements the initial user login flow.
+Implements goroutine-based parallel execution with
+semaphore pattern to limit concurrency to 8 tasks.
 
-Fixes #3
+Fixes #15
 ```
 
 ```
-fix(ui): prevent crash on missing avatar
+fix(updater): handle GitHub API redirects
 
-Check for null avatar and fallback to initials.
+GitHub API can return redirects causing update check
+to fail. Now properly follows redirects.
 
-Fixes #7, #8
-```
-
-```
-refactor(api): split user service into modules
-
-BREAKING CHANGE: user service endpoints changed from /user/v1/* to /user/v2/*
-```
-
-❌ **BAD:**
-```
-Update stuff                     # No type, vague
-feat: Add feature               # Capital letter in subject
-fix: fixed bug.                 # Past tense, trailing period
-feature: new login              # Wrong type (use 'feat')
-feat(auth): add                 # Subject too short (<10 chars)
-```
-
-### PR Title & Description
-
-**Title format:** `<type>: <short summary> (#ISSUE)`
-
-**Examples:**
-```
-feat: add JWT login endpoint (#3)
-fix: prevent null avatar crash (#7)
-```
-
-**PR Description Template:**
-```markdown
-### Summary
-Short description of the changes.
-
-### Changes
-- Bullet list of main changes
-- Any migrations / DB changes
-
-### Related Issues
-Fixes #3
-
-### QA / Testing
-Steps to reproduce / test plan.
-
-### Screenshots / Notes
-Attach screenshots or important notes here.
+Fixes #23
 ```
 
 ---
@@ -333,75 +354,52 @@ Attach screenshots or important notes here.
 
 ### 1. File-Level Documentation (Required for EVERY file)
 
-Every file **must begin** with a detailed DocString or header comment:
+Every Go file **must begin** with a detailed comment block:
 
-```bash
-#!/usr/bin/env bash
-# File: path/to/script.sh
-# Purpose: [What this file does]
-# Problem: [What problem it solves]
-# Role: [Its role in overall architecture]
-# Usage: [How and when to use it]
-# Design choices: [Important architectural decisions]
-# Assumptions: [Required preconditions or constraints]
-```
-
-**Example from setup.sh (lines 1-10):**
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Dev Setup Bootstrap (macOS only)
-# Purpose: Provision a consistent local dev environment in minutes using Homebrew plus curated tools.
-# Problem: Team members spend hours configuring git/node/python/flutter/editors manually; this script standardizes it.
-# Architectural role: Single entrypoint shell script; delegates installs to Homebrew or official installers, and clones helper repos under ~/.local/share/dev-setup.
-# Usage: Run ./setup.sh on macOS; follow POST_INSTALL.txt for manual steps like PATH/zsh config.
-# Design choices: Uses ~/.local/{bin,share} for shims/state; keeps clones isolated from repo; idempotent installs via brew checks; leaves git config application manual for safety.
-# Assumptions: macOS host with curl and git; user consents to Homebrew installation and cask prompts; network access available during run.
+```go
+// File: internal/installer/parallel.go
+// Purpose: Parallel task execution engine with concurrency control
+// Problem: Need to execute multiple tasks concurrently without overwhelming system
+// Role: Core execution engine that runs tasks in parallel groups with semaphore pattern
+// Usage: Create ParallelExecutor, call Execute() with task slice
+// Design choices: Goroutines + channels; semaphore limits concurrency; retries with backoff
+// Assumptions: Bash available for command execution; tasks are independent within groups
 ```
 
 ### 2. Function/Method Documentation (Required for EVERY function)
 
-**Example from setup.sh (lines 19-27):**
-```bash
-# Function: log
-# What: Prints a normalized log line with a dev-setup prefix.
-# Why: Provides consistent user feedback during bootstrap steps.
-# Params: $1..$n - message tokens to print.
-# Returns: 0 always.
-# Example: log "Installing brew"
-log() {
-  printf "[dev-setup] %s\n" "$*"
+**Example from installer.go:**
+```go
+// RunStage executes a single installation stage
+// What: Loads stage config, executes tasks via parallel executor, updates state
+// Why: Main entry point for stage execution with complete error handling
+// Params: stageConfigPath - path to stage YAML file (e.g. "configs/stage1.yaml")
+// Returns: Error if stage failed, nil if successful
+// Example: err := installer.RunStage("configs/stage1.yaml")
+// Edge cases: Creates state directory if missing; handles partial failures
+func (i *Installer) RunStage(stageConfigPath string) error {
+    // Implementation
 }
 ```
-
-**Required elements:**
-- **What**: Function's purpose
-- **Why**: Reason it exists
-- **Params**: Each parameter with name, type, purpose
-- **Returns**: Return value(s)
-- **Example**: Usage example (where meaningful)
-- **Edge cases**: Constraints or special conditions
-
-**This applies to:**
-- Utility functions
-- Private/internal helpers
-- Small or "obvious" methods
 
 ### 3. Inline Comments
 
 **Explain WHY, not just WHAT:**
 
 ✅ **GOOD:**
-```bash
-# Nerd font glyphs require preset; package.display_private shows private package versions
-ensure_starship_config
+```go
+// Condition check failed - skip task execution
+if !p.checkCondition(ctx, task.Condition) {
+    return TaskResult{Output: "Skipped (condition not met)"}
+}
 ```
 
 ❌ **BAD:**
-```bash
-# Call ensure starship config
-ensure_starship_config
+```go
+// Check condition
+if !p.checkCondition(ctx, task.Condition) {
+    return TaskResult{Output: "Skipped (condition not met)"}
+}
 ```
 
 ---
@@ -414,61 +412,38 @@ ensure_starship_config
 
 **Before ANY commit or PR:**
 
-1. **Run all relevant linters:**
+1. **Run all tests:**
    ```bash
-   # Shell scripts
-   shellcheck setup.sh tests/test_setup.sh
-
-   # JS/TS (if applicable)
-   pnpm run lint
-   pnpm run format
-
-   # Python (if applicable)
-   uv run ruff check .
-   uv run black --check .
+   make test
+   # OR
+   go test ./...
    ```
 
-2. **Run all test suites:**
+2. **Run linter:**
    ```bash
-   # This repo
-   bash tests/test_setup.sh
-
-   # General pattern
-   pnpm test         # Node.js projects
-   uv run pytest     # Python projects
+   make lint
+   # OR
+   golangci-lint run
    ```
 
-3. **Fix ALL errors:**
-   - **DO NOT suppress errors** unless explicitly allowed
-   - **DO NOT commit failing or flaky tests**
-   - **DO NOT commit lint violations**
+3. **Verify build:**
+   ```bash
+   make build
+   make build-all  # Test both architectures
+   ```
+
+4. **Check test coverage:**
+   ```bash
+   go test -v -race -coverprofile=coverage.out ./...
+   go tool cover -func=coverage.out
+   ```
 
 ### ⚠️ NEVER Commit:
 - Failing tests
 - Lint violations
+- Code without tests
 - Breaking changes (without BREAKING CHANGE footer)
-- Code that hasn't been linted
-- Code that hasn't been tested
-
----
-
-## 🔒 Commit & PR Quality Standards
-
-### Commit Requirements
-
-Commits must be:
-- **Small**: Single logical change per commit
-- **Focused**: One purpose, one commit
-- **Logically grouped**: Related changes together
-
-### PR Requirements
-
-PRs should:
-- **Clearly describe** what changed and why
-- **Reference relevant files** or architectural concerns
-- **Include test results** and validation steps
-- **Avoid unrelated changes** (no scope creep)
-- **Pass all CI checks** before requesting review
+- Code that doesn't build
 
 ---
 
@@ -485,173 +460,238 @@ PRs should:
    - File-level documentation (every file)
    - Function-level documentation (every function)
    - Inline comments (explain WHY)
-   - Two-space indent (shell scripts)
-   - Idempotent operations
+   - Proper error handling
+   - Test coverage
 
-3. **Test changes:**
-   ```bash
-   # For setup.sh changes
-   shellcheck setup.sh
-   bash tests/test_setup.sh
+3. **Write tests:**
+   ```go
+   // File: internal/installer/parallel_test.go
+   func TestParallelExecutor_ExecuteSequential(t *testing.T) {
+       ui := &mockUI{}
+       executor := NewParallelExecutor(4, 30*time.Second, ui)
 
-   # Test actual bootstrap (optional, safe to re-run)
-   ./setup.sh
+       tasks := []config.Task{
+           {Name: "Task 1", Command: "echo test"},
+       }
+
+       err := executor.Execute(tasks)
+       if err != nil {
+           t.Fatalf("Expected no error, got: %v", err)
+       }
+   }
    ```
 
-4. **Commit with proper format:**
+4. **Test changes:**
+   ```bash
+   # Run tests
+   make test
+
+   # Run linter
+   make lint
+
+   # Build binary
+   make build
+
+   # Test actual installation (optional)
+   ./devsetup install --dry-run
+   ```
+
+5. **Commit with proper format:**
    ```bash
    git add .
-   git commit -m "feat(installer): add new tool support
+   git commit -m "feat(installer): add new feature
 
-   Adds idempotent installation for <tool-name>.
+   Adds new functionality with proper error handling
+   and test coverage.
 
    Fixes #42"
    ```
-   - Commit message will be validated by `.git/hooks/commit-msg`
-   - Must pass Conventional Commits format
 
-5. **Create PR:**
+6. **Create PR:**
    ```bash
    git push -u origin feat/42-add-feature-name
-   # Then create PR via GitHub with proper template
+   # Then create PR via GitHub
    ```
-
-### When Adding New Tools to setup.sh
-
-**Pattern for Homebrew formula:**
-```bash
-# In main() function (line 412-440), add:
-install_formula <formula-name>
-```
-
-**Pattern for Git repository clone:**
-```bash
-# Create function (follow existing patterns):
-install_my_tool() {
-  local dest="${STATE_DIR}/my-tool"
-  clone_or_update https://github.com/user/my-tool "$dest"
-
-  # Optional: symlink binary if needed
-  if [ -x "$dest/bin/tool" ]; then
-    link_bin "$dest/bin/tool" "${LOCAL_BIN}/tool"
-  fi
-}
-
-# Call in main():
-install_my_tool
-```
-
-**Don't forget:**
-- Update README.md "What gets installed" section
-- Update `POST_INSTALL.txt` template if manual steps required
-- Bump `DEV_SETUP_VERSION` (line 13) if behavior changes
-- Add tests to `tests/test_setup.sh` if applicable
 
 ---
 
-## 🔐 Environment Consistency Requirements
+## 🔨 Adding New Tools
 
-To ensure "it works exactly the same on every machine":
+### 1. Add to Brewfile
 
-### 1. Version Locking
-- **Homebrew**: Formulas install latest stable (acceptable variance)
-- **Python packages**: Use `uv.lock` (commit to repo)
-- **Node packages**: Use `pnpm-lock.yaml` (commit to repo)
-- **Dev-setup version**: Tracked in `~/.local/share/dev-setup/version`
+```ruby
+# Brewfile
+brew "new-tool"
+```
 
-### 2. State Management
-- All state under `~/.local/share/dev-setup/` (never in repo)
-- Shims under `~/.local/bin/` (never in repo)
-- User must add `~/.local/bin` to PATH (documented in POST_INSTALL.txt)
+### 2. Lock Homebrew versions
 
-### 3. Configuration Standardization
-- Starship config: Standardized via `ensure_starship_config()`
-- Zsh plugins: Cloned to known locations
-- Git config: Provided but manual application (safety)
-- Terminal font: Hack Nerd Font installed, user applies
+```bash
+brew bundle install
+brew bundle lock --lockfile=Brewfile.lock.json
+```
 
-### 4. Testing Strategy
-- **Local validation**: `bash tests/test_setup.sh` (no network, safe)
-- **Real bootstrap test**: `./setup.sh` (idempotent, safe to re-run)
-- **Shellcheck**: `shellcheck setup.sh` (catches shell errors)
+### 3. Add to versions.lock
 
-### 5. Documentation
-- `POST_INSTALL.txt`: Generated with manual steps
-- `README.md`: User-facing quickstart
-- `CLAUDE.md`: This file (development standards)
-- `docs/guide.md`: Detailed reference
+```toml
+# versions.lock
+[homebrew.formulas.new-tool]
+version = "1.2.3"
+tap = "homebrew/core"
+```
+
+### 4. Add installation task to stage config
+
+```yaml
+# configs/stage2.yaml
+tasks:
+  - name: "Install new-tool"
+    command: "brew install new-tool"
+    parallel_group: "homebrew-tools"
+    required: false
+    timeout: 120s
+    condition: "! command -v new-tool"
+```
+
+### For Git Repositories
+
+```toml
+# versions.lock
+[git_repos.repo-name]
+url = "https://github.com/user/repo.git"
+commit = "abc123def456"
+path = "~/dev/repo-name"
+shallow = true
+stage = 2
+```
+
+```yaml
+# Stage config
+- name: "Clone repo-name"
+  command: |
+    if [ ! -d ~/dev/repo-name ]; then
+      git clone --depth=1 https://github.com/user/repo.git ~/dev/repo-name
+      cd ~/dev/repo-name && git checkout abc123def456
+    fi
+  parallel_group: "git-repos"
+  required: false
+  timeout: 180s
+```
 
 ---
 
 ## 📚 Common Development Tasks
 
-### Testing Without Side Effects
+### Testing Specific Components
+
 ```bash
-# Stubbed tests (no network, temporary HOME)
-bash tests/test_setup.sh
+# Test config loader
+go test ./internal/config -v
+
+# Test parallel executor
+go test ./internal/installer -run TestParallelExecutor -v
+
+# Test updater
+go test ./internal/updater -v
+
+# Test with race detector
+go test -race ./...
 ```
 
-### Testing Actual Bootstrap (Safe to Re-run)
-```bash
-# Full bootstrap on your machine
-./setup.sh
+### Debugging
 
-# Script is idempotent:
-# - Skips existing formulas/casks
-# - Fast-forwards existing git repos
-# - Updates version marker
+```bash
+# Verbose test output
+go test -v ./...
+
+# Run with dry-run
+./devsetup install --dry-run
+
+# Run diagnostics
+./devsetup doctor
 ```
 
-### Linting Before Commit
-```bash
-shellcheck setup.sh
-shellcheck tests/test_setup.sh
-shellcheck zsh/dev-setup.zsh
+### Modifying Stage Configurations
+
+Stage configs are YAML files in `configs/`:
+
+```yaml
+name: "Stage Name"
+timeout: 30m
+parallel: true
+
+tasks:
+  - name: "Task Name"
+    command: "shell command"
+    parallel_group: "group-name"  # Tasks in same group run concurrently
+    required: true                 # Fail stage if this fails
+    timeout: 60s
+    retry_count: 2
+    condition: "test command"      # Skip if condition fails
+
+post_stage:
+  message: "Stage complete!"
 ```
 
-### Updating Dev-Setup Version
-```bash
-# In setup.sh line 13:
-DEV_SETUP_VERSION="0.3.0"  # Bump version
+### Updating Dependencies
 
-# Script will detect upgrade on next run
+```bash
+# Update Go modules
+go get -u ./...
+go mod tidy
+
+# Verify build still works
+make build
+make test
 ```
 
-### Modifying Starship Config Behavior
-Edit `ensure_starship_config()` function (lines 283-332). The inline Python script handles TOML patching to avoid duplicate `[package]` sections.
+---
 
-### Adding Zsh Plugin
-```bash
-# In install_zsh_plugins() function (lines 242-249):
-clone_or_update https://github.com/user/plugin "${PLUGINS_DIR}/plugin-name"
+## 🚀 Release Process
 
-# In zsh/dev-setup.zsh, add sourcing:
-if [ -f "$HOME/.local/share/dev-setup/zsh-plugins/plugin-name/plugin.zsh" ]; then
-  source "$HOME/.local/share/dev-setup/zsh-plugins/plugin-name/plugin.zsh"
-fi
-```
+### Creating a Release
+
+1. **Ensure all tests pass:**
+   ```bash
+   make test
+   make lint
+   make build-all
+   ```
+
+2. **Create git tag:**
+   ```bash
+   git tag -a v0.5.0 -m "Release v0.5.0: Add feature X"
+   git push origin v0.5.0
+   ```
+
+3. **GitHub Actions automatically:**
+   - Runs CI tests
+   - Builds binaries (darwin-arm64, darwin-amd64)
+   - Generates SHA256 checksums
+   - Creates GitHub release
+   - Publishes release notes
+
+4. **Users can update with:**
+   ```bash
+   devsetup update
+   ```
 
 ---
 
 ## ⚠️ Important Constraints & Assumptions
 
 ### Platform Requirements
-- **macOS ONLY**: Script exits on non-Darwin systems (line 46-50)
-- **Requires**: `curl`, `git` (assumed present on macOS)
-- **Network required**: Homebrew install, git clones, uv installer
+- **macOS ONLY**: Primary development platform
+- **Go 1.21+**: Required for building
+- **Homebrew**: Will be installed if missing
+- **Network required**: For downloads and git clones
 
-### User Interactions
-- **Homebrew install prompts** user (first-time only)
-- **No silent system modifications** (user consent required)
-- **Manual steps documented** in `POST_INSTALL.txt`
-
-### Manual Steps After Bootstrap
-1. Add `~/.local/bin` to PATH in `~/.zprofile`
-2. Source `zsh/dev-setup.zsh` from `~/.zshrc`
-3. Switch terminal font to **Hack Nerd Font**
-4. Run `flutterw doctor` (downloads Flutter)
-5. Review and apply `~/.local/share/dev-setup/git-config`
-6. Authenticate AI CLIs if installed (`codex login`, `gemini login`, `claude auth`)
+### Design Decisions
+- **Single binary**: No runtime dependencies
+- **User-level installation**: No sudo required
+- **State in ~/.local/**: Never modifies system directories
+- **Idempotent**: Safe to re-run all operations
+- **Version locking**: Ensures consistency across machines
 
 ---
 
@@ -659,20 +699,19 @@ fi
 
 Before committing ANY code change, verify:
 
-- [ ] Shellcheck passes: `shellcheck setup.sh`
-- [ ] Tests pass: `bash tests/test_setup.sh`
+- [ ] Tests pass: `make test`
+- [ ] Linter passes: `make lint`
+- [ ] Build succeeds: `make build`
 - [ ] File-level documentation present (ALL files)
 - [ ] Function-level documentation present (ALL functions)
-- [ ] Inline comments explain WHY (not just what)
-- [ ] Commit message follows Conventional Commits format
-- [ ] Commit message has type, scope (optional), subject (10-72 chars, lowercase)
-- [ ] Commit message references issue (`Fixes #N`)
-- [ ] No usage of forbidden package managers (npm, yarn, pip, poetry, bun)
-- [ ] Only `pnpm` (Node.js) and `uv` (Python) used
-- [ ] Idempotent operations (safe to re-run)
-- [ ] No breaking changes without `BREAKING CHANGE:` footer
+- [ ] Inline comments explain WHY
+- [ ] Test coverage for new code (>80%)
+- [ ] Commit message follows Conventional Commits
+- [ ] Commit references issue (`Fixes #N`)
+- [ ] No forbidden package managers (npm, yarn, pip, poetry)
+- [ ] Only `pnpm` (Node.js), `uv` (Python), `go mod` (Go)
 - [ ] README.md updated if user-facing changes
-- [ ] `DEV_SETUP_VERSION` bumped if behavior changes
+- [ ] CONTRIBUTING.md updated if workflow changes
 
 ---
 
@@ -682,37 +721,37 @@ Before committing ANY code change, verify:
 - Use npm, yarn, bun, pip, pipenv, poetry, conda
 - Commit code without file-level documentation
 - Commit code without function-level documentation
-- Suppress linting errors without explicit reason
+- Commit code without tests
+- Suppress linting errors without reason
 - Commit failing tests
 - Skip running tests before commit
 - Use commit messages without type prefix
-- Use commit messages with uppercase subject start
-- Use commit messages shorter than 10 characters
-- Create branches without descriptive names (e.g., `feat/42` - must be `feat/42-description`)
-- Make system-wide modifications (use `~/.local/` instead)
-- Auto-apply git config (leave manual for safety)
+- Make system-wide modifications (use ~/.local/)
+- Ignore error returns
+- Use panic() except in truly unrecoverable situations
 
 ---
 
-## 📖 Reference Documentation Files
+## 📖 Reference Documentation
 
-- **README.md**: User quickstart, what gets installed, post-install steps
-- **AGENTS.md**: Contributor guidelines, coding style, commit expectations
-- **docs/guide.md**: Detailed install flow, state paths, environment replication
-- **docs/hierarchy-diagram.md**: Visual repo and runtime state layout
-- **global_conf/claude.md**: Mandatory engineering standards (THIS IS LAW)
-- **global_conf/git_best_practices.md**: Git workflow standards (THIS IS LAW)
-- **global_conf/instructions.md**: Code quality requirements (THIS IS LAW)
+- **README.md**: User quickstart and feature overview
+- **CONTRIBUTING.md**: Comprehensive developer guide
+- **AGENTS.md**: Agent coordination and task planning
+- **global_conf/claude.md**: Mandatory engineering standards
+- **global_conf/git_best_practices.md**: Git workflow standards
+- **global_conf/instructions.md**: Code quality requirements
 
 ---
 
 ## 🎓 Key Takeaways
 
 1. **Environment consistency is paramount** - exact replication across machines
-2. **Package managers are STRICTLY enforced** - only pnpm and uv
-3. **Documentation is MANDATORY** - file-level, function-level, inline comments
-4. **Testing is NON-NEGOTIABLE** - lint and test before every commit
-5. **Git workflow is standardized** - branch naming, commit format, PR templates
-6. **Idempotency is required** - all operations safe to re-run
-7. **State isolation is enforced** - user-level paths only
-8. **Commit hooks are law** - must pass Conventional Commits validation
+2. **Package managers are STRICTLY enforced** - only pnpm, uv, go mod
+3. **Documentation is MANDATORY** - file, function, inline comments
+4. **Testing is NON-NEGOTIABLE** - test everything, >80% coverage
+5. **Three-stage progressive setup** - productive in 5 minutes
+6. **Parallel execution** - maximize speed with goroutines
+7. **Version locking** - Brewfile.lock.json + versions.lock
+8. **Self-updating** - binary updates via GitHub releases
+9. **Go best practices** - proper error handling, clean code
+10. **CI/CD automated** - tests, builds, releases all automated

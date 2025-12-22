@@ -1,0 +1,156 @@
+# File: configs/stage1.yaml
+# Purpose: Stage 1 (Critical Path) configuration - get developer productive in 5 minutes
+# Problem: Need to install minimum viable toolset for coding immediately
+# Role: Defines critical tools that must be installed before developer can work
+# Usage: Loaded and executed by `devsetup install` as first stage
+# Design choices: Parallel where possible; required=true for essential tools; short timeout
+# Assumptions: macOS host; network available; user has admin permissions for Homebrew install
+
+name: "Critical Path"
+timeout: 300s  # 5 minutes maximum
+
+# Enable parallel execution within groups
+parallel: true
+
+tasks:
+  # Task 1: Install Homebrew (required, sequential)
+  # Must complete before other brew commands can run
+  - name: "Install Homebrew"
+    command: |
+      if command -v brew >/dev/null 2>&1; then
+        echo "Homebrew already installed"
+        exit 0
+      fi
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+      # Configure shellenv for current session
+      if [ -x /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+      elif [ -x /usr/local/bin/brew ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+      fi
+    required: true
+    timeout: 120s
+    condition: ""  # Always run
+
+  # Parallel group: Install critical CLI tools via Homebrew
+  # These can install simultaneously to save time
+  - name: "Install Git"
+    command: |
+      if brew ls --versions git >/dev/null 2>&1; then
+        echo "Git already installed"
+      else
+        brew install git
+      fi
+    parallel_group: "homebrew-critical"
+    required: true
+    timeout: 90s
+
+  - name: "Install Node.js"
+    command: |
+      if brew ls --versions node >/dev/null 2>&1; then
+        echo "Node already installed"
+      else
+        brew install node
+      fi
+    parallel_group: "homebrew-critical"
+    required: true
+    timeout: 90s
+
+  - name: "Install pnpm"
+    command: |
+      if brew ls --versions pnpm >/dev/null 2>&1; then
+        echo "pnpm already installed"
+      else
+        brew install pnpm
+      fi
+    parallel_group: "homebrew-critical"
+    required: true
+    timeout: 60s
+
+  # Parallel group: Install Python toolchain
+  - name: "Install uv (Python package manager)"
+    command: |
+      if command -v uv >/dev/null 2>&1; then
+        echo "uv already installed"
+        exit 0
+      fi
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+    parallel_group: "python-tools"
+    required: true
+    timeout: 60s
+    retry_count: 2
+
+  # Parallel group: Install editor
+  - name: "Install Zed editor"
+    command: |
+      if brew list --cask zed >/dev/null 2>&1; then
+        echo "Zed already installed"
+      else
+        brew install --cask zed
+      fi
+    parallel_group: "editor"
+    required: false  # Not strictly required - developer might prefer VS Code
+    timeout: 90s
+
+  # Sequential: Configure shell (must run after tools installed)
+  - name: "Configure shell PATH"
+    command: |
+      ZPROFILE="${HOME}/.zprofile"
+
+      # Add ~/.local/bin to PATH if not present
+      if ! grep -q '\.local/bin' "$ZPROFILE" 2>/dev/null; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$ZPROFILE"
+        echo "Added ~/.local/bin to PATH"
+      else
+        echo "PATH already configured"
+      fi
+
+      # Add Homebrew to PATH if not present
+      if [ -x /opt/homebrew/bin/brew ]; then
+        if ! grep -q '/opt/homebrew/bin/brew shellenv' "$ZPROFILE" 2>/dev/null; then
+          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZPROFILE"
+          echo "Added Homebrew shellenv (Apple Silicon)"
+        fi
+      elif [ -x /usr/local/bin/brew ]; then
+        if ! grep -q '/usr/local/bin/brew shellenv' "$ZPROFILE" 2>/dev/null; then
+          echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZPROFILE"
+          echo "Added Homebrew shellenv (Intel)"
+        fi
+      fi
+    required: true
+    timeout: 10s
+
+  # Sequential: Setup Git configuration basics
+  - name: "Setup Git config"
+    command: |
+      # Set default branch name to main
+      git config --global init.defaultBranch main
+
+      # Set pull strategy to rebase
+      git config --global pull.rebase true
+
+      # Enable credential helper
+      git config --global credential.helper osxkeychain
+
+      echo "Basic Git configuration complete"
+      echo "Note: Set user.name and user.email manually:"
+      echo "  git config --global user.name \"Your Name\""
+      echo "  git config --global user.email \"your@email.com\""
+    required: false
+    timeout: 10s
+
+post_stage:
+  message: |
+
+    ✅ Stage 1 complete! You can now start coding.
+
+    Next steps:
+      • Clone your repos: git clone <repo-url>
+      • Install dependencies: pnpm install / uv sync
+      • Start coding: zed .
+
+    Stage 2 (Full Development Stack) is starting in background...
+
+  next_stage: "configs/stage2.yaml"
+  blocking: false  # Stage 2 runs in background

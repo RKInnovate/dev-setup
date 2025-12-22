@@ -1,0 +1,125 @@
+# File: .github/workflows/release.yml
+# Purpose: Automated release workflow - builds binaries and creates GitHub release
+# Problem: Manual building and releasing is error-prone and time-consuming
+# Role: CI/CD pipeline for building, testing, and releasing devsetup binaries
+# Usage: Triggered on git tag push (v*.*.*)
+# Design choices: Builds for multiple architectures; generates checksums; creates GitHub release
+# Assumptions: Go 1.21+ available; GitHub Actions runner; proper git tags
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v0.4.0
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git describe
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Run tests
+        run: |
+          go test -v -race ./...
+
+      - name: Build binaries for all architectures
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Darwin ARM64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD)" \
+            -o devsetup-darwin-arm64 \
+            ./cmd/devsetup
+
+          # Darwin AMD64 (Intel Mac)
+          GOOS=darwin GOARCH=amd64 go build \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD)" \
+            -o devsetup-darwin-amd64 \
+            ./cmd/devsetup
+
+      - name: Generate checksums
+        run: |
+          shasum -a 256 devsetup-darwin-arm64 > devsetup-darwin-arm64.sha256
+          shasum -a 256 devsetup-darwin-amd64 > devsetup-darwin-amd64.sha256
+
+      - name: Create release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md <<'EOF'
+          ## Installation
+
+          ### One-Line Install
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/rkinnovate/dev-setup/main/bootstrap.sh | bash
+          ```
+
+          ### Or Download Binary
+
+          **Apple Silicon (M1/M2/M3)**:
+          ```bash
+          curl -fsSL https://github.com/rkinnovate/dev-setup/releases/download/${{ steps.version.outputs.version }}/devsetup-darwin-arm64 -o devsetup
+          chmod +x devsetup
+          sudo mv devsetup /usr/local/bin/
+          ```
+
+          **Intel Mac**:
+          ```bash
+          curl -fsSL https://github.com/rkinnovate/dev-setup/releases/download/${{ steps.version.outputs.version }}/devsetup-darwin-amd64 -o devsetup
+          chmod +x devsetup
+          sudo mv devsetup /usr/local/bin/
+          ```
+
+          ### Update Existing Installation
+          ```bash
+          devsetup update
+          ```
+
+          ## What's Changed
+
+          See commit history for detailed changes.
+
+          ## Checksums
+
+          Verify downloads with SHA256 checksums included in this release.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            devsetup-darwin-arm64
+            devsetup-darwin-amd64
+            devsetup-darwin-arm64.sha256
+            devsetup-darwin-amd64.sha256
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Update Homebrew formula (if applicable)
+        run: |
+          echo "TODO: Update Homebrew formula with new version and checksums"
+          # This would update a Homebrew tap if you maintain one
