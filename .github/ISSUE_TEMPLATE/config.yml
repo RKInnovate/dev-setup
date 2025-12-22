@@ -1,0 +1,9 @@
+# Organization-level Issue Form config
+blank_issues_enabled: false
+contact_links:
+  - name: Security policy (private)
+    url: https://github.com/RKInnovate/.github/blob/main/SECURITY.md
+    about: "Report security vulnerabilities (private channel). Use this for sensitive security issues only."
+  - name: General support
+    url: https://github.com/RKInnovate/.github/ISSUE_TEMPLATE#support--questions
+    about: "Use the 'Support / Question' template for product/help requests."

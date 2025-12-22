@@ -1,0 +1,43 @@
+name: "🔐 Security vulnerability report"
+description: "Report a potential security vulnerability. Do NOT include sensitive secrets or PII in this issue — use the private disclosure channel described below."
+title: "[SECURITY] "
+labels: ["security", "triage", "private"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security disclosure instructions**
+        * Do NOT post exploits, PII, credentials, or sensitive attachments in a public issue.
+        * If you have sensitive details, email: security@ORG-DOMAIN (or use our private disclosure process) — see SECURITY.md.
+        * If this is non-sensitive proof-of-concept information safe for public view, fill the form below.
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      placeholder: "SQL injection in /api/endpoint"
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What could an attacker do? Data exposure, RCE, privilege escalation, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: poc
+    attributes:
+      label: Proof-of-concept (non-sensitive)
+      description: Steps or code to reproduce (do NOT include secrets).
+  - type: input
+    id: disclosure_contact
+    attributes:
+      label: Contact email (for private follow-up)
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Anything else maintainers should know.

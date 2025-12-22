@@ -1,0 +1,74 @@
+name: "🐞 Bug report"
+description: "Report a reproducible bug so we can investigate and fix it quickly."
+title: "[BUG] "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug — please fill in the details below. Provide as much context as you can to help us reproduce and fix the issue.
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      description: A one-line summary of the bug.
+      placeholder: e.g. "Crash when opening settings with locale=fr"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step list to reproduce the bug.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+      placeholder: "Settings should open without crashing."
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened.
+      placeholder: "App crashes with stacktrace ..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output / stack trace (if any)
+      description: Attach or paste logs. Use backticks for code blocks.
+      placeholder: "Paste logs, stack traces, or attach files."
+  - type: checkboxes
+    id: attachments
+    attributes:
+      label: Attachments
+      description: Add screenshots, recordings, or example files if helpful.
+      options:
+        - label: I have attached necessary screenshots / repro assets
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "blocker — blocks development or release"
+        - "major — feature broken or severe bug"
+        - "minor — small bug, workaround exists"
+        - "cosmetic — UI/typo"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Anything else the maintainers should know.
