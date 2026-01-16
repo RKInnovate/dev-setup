@@ -1,0 +1,118 @@
+# File: configs/tools.yaml
+# Purpose: Define what tools to install (install phase only)
+# Problem: Need declarative definition of tools with idempotency checks
+# Role: Single source of truth for tool installation
+# Usage: Loaded by `devsetup install` command
+# Design choices: Check before install; parallel groups for speed; dependency ordering
+# Assumptions: Homebrew will be installed first; internet connection available
+
+tools:
+  # Core: Homebrew (must be first)
+  - name: homebrew
+    description: "Package manager for macOS"
+    check: command -v brew
+    install:
+      command: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+      timeout: 300s
+    required: true
+
+  # Core CLI tools (can install in parallel)
+  - name: git
+    description: "Version control system"
+    check: command -v git
+    install:
+      command: brew install git
+      parallel_group: homebrew-cli
+      timeout: 120s
+    depends_on: [homebrew]
+    required: true
+
+  - name: node
+    description: "JavaScript runtime"
+    check: command -v node
+    install:
+      command: brew install node
+      parallel_group: homebrew-cli
+      timeout: 180s
+    depends_on: [homebrew]
+    required: true
+
+  - name: python
+    description: "Python runtime"
+    check: command -v python3
+    install:
+      command: brew install python
+      parallel_group: homebrew-cli
+      timeout: 180s
+    depends_on: [homebrew]
+    required: true
+
+  - name: starship
+    description: "Fast, customizable shell prompt"
+    check: command -v starship
+    install:
+      command: brew install starship
+      parallel_group: homebrew-cli
+      timeout: 90s
+    depends_on: [homebrew]
+    required: false
+
+  - name: uv
+    description: "Fast Python package manager"
+    check: command -v uv
+    install:
+      command: brew install uv
+      parallel_group: homebrew-cli
+      timeout: 90s
+    depends_on: [homebrew]
+    required: true
+
+  - name: pnpm
+    description: "Fast, disk space efficient Node package manager"
+    check: command -v pnpm
+    install:
+      command: brew install pnpm
+      parallel_group: homebrew-cli
+      timeout: 90s
+    depends_on: [homebrew]
+    required: true
+
+  - name: claude-code
+    description: "Claude AI code assistant CLI"
+    check: command -v claude
+    install:
+      command: brew install claude-code
+      parallel_group: homebrew-cli
+      timeout: 90s
+    depends_on: [homebrew]
+    required: false
+
+  # GUI Applications (casks)
+  - name: zed
+    description: "High-performance code editor"
+    check: command -v zed
+    install:
+      command: brew install --cask zed
+      parallel_group: homebrew-casks
+      timeout: 180s
+    depends_on: [homebrew]
+    required: false
+
+  # Post-install setup tasks
+  - name: pnpm-setup
+    description: "Configure pnpm store and global bin"
+    check: pnpm config get store-dir && pnpm config get global-bin-dir
+    install:
+      command: pnpm setup
+      timeout: 30s
+    depends_on: [pnpm]
+    required: true
+
+  - name: gemini-cli
+    description: "Google Gemini CLI"
+    check: command -v gemini
+    install:
+      command: pnpm install -g @google/gemini-cli
+      timeout: 120s
+    depends_on: [pnpm-setup]
+    required: false
