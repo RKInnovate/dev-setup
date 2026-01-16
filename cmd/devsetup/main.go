@@ -29,7 +29,7 @@ func init() {
 }
 
 // version is set during build via -ldflags
-var version = "0.2.0-dev"
+var version = "2.0.0"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
