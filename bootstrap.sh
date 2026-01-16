@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # File: bootstrap.sh
-# Purpose: Minimal bootstrap script to download and run devsetup Go binary
+# Purpose: Minimal bootstrap script to download and install devsetup Go binary
 # Problem: Need simple one-liner to kick off installation without pre-installed dependencies
-# Role: Downloads devsetup binary from GitHub releases, makes executable, runs install command
+# Role: Downloads devsetup binary from GitHub releases, installs to ~/.local/bin, runs install
 # Usage: curl -fsSL https://raw.githubusercontent.com/rkinnovate/dev-setup/main/bootstrap.sh | bash
-# Design choices: Minimal dependencies (only bash, curl); detects architecture; cleans up on error
+# Design choices: Minimal dependencies (only bash, curl); detects architecture; installs to user bin
 # Assumptions: macOS host; curl available; internet access; GitHub releases exist
 
 set -euo pipefail
 
 # Version to download (can be overridden with DEVSETUP_VERSION env var)
 VERSION="${DEVSETUP_VERSION:-latest}"
+
+# Installation directory (user-local, no sudo required)
+INSTALL_DIR="${HOME}/.local/bin"
 
 # Detect architecture
 ARCH="$(uname -m)"
@@ -40,7 +43,7 @@ fi
 
 # Temporary download location
 TEMP_DIR="$(mktemp -d)"
-BINARY_PATH="${TEMP_DIR}/devsetup"
+TEMP_BINARY="${TEMP_DIR}/devsetup"
 
 # Cleanup function
 cleanup() {
@@ -59,7 +62,7 @@ echo "Downloading devsetup ($VERSION)..."
 echo ""
 
 # Download binary
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH"; then
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_BINARY"; then
   echo "❌ Failed to download devsetup binary"
   echo ""
   echo "Troubleshooting:"
@@ -70,15 +73,47 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH"; then
 fi
 
 # Make executable
-chmod +x "$BINARY_PATH"
+chmod +x "$TEMP_BINARY"
 
 echo "✅ Downloaded devsetup binary"
 echo ""
+
+# Create installation directory if it doesn't exist
+mkdir -p "$INSTALL_DIR"
+
+# Install binary
+echo "Installing devsetup to $INSTALL_DIR..."
+mv "$TEMP_BINARY" "$INSTALL_DIR/devsetup"
+
+echo "✅ Installed devsetup to $INSTALL_DIR/devsetup"
+echo ""
+
+# Check if ~/.local/bin is in PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+  echo "⚠️  $INSTALL_DIR is not in your PATH"
+  echo "   Adding to ~/.zshrc..."
+  echo ""
+
+  # Add to .zshrc if not already there
+  ZSHRC="$HOME/.zshrc"
+  PATH_LINE="export PATH=\"\$HOME/.local/bin:\$PATH\""
+
+  if [ -f "$ZSHRC" ] && ! grep -q "\.local/bin" "$ZSHRC"; then
+    echo "" >> "$ZSHRC"
+    echo "# Added by dev-setup bootstrap" >> "$ZSHRC"
+    echo "$PATH_LINE" >> "$ZSHRC"
+    echo "✅ Added $INSTALL_DIR to PATH in ~/.zshrc"
+  fi
+
+  # Add to current session
+  export PATH="$INSTALL_DIR:$PATH"
+fi
+
 echo "Starting installation..."
 echo ""
 
 # Run installer
-"$BINARY_PATH" install
+devsetup install
 
 # Installation complete
 echo ""
@@ -88,15 +123,14 @@ echo "║   🎉 Installation Complete!                            ║"
 echo "║                                                        ║"
 echo "╚════════════════════════════════════════════════════════╝"
 echo ""
+echo "The devsetup binary is installed at: $INSTALL_DIR/devsetup"
+echo ""
 echo "Next steps:"
 echo "  1. Restart your terminal (or run: source ~/.zshrc)"
-echo "  2. Verify installation: devsetup verify"
-echo "  3. Check status: devsetup status"
+echo "  2. Run configuration: devsetup setup"
+echo "  3. Verify installation: devsetup verify"
+echo "  4. Check status: devsetup status"
 echo ""
-echo "The devsetup binary has been removed."
-echo "To install permanently:"
-echo "  git clone https://github.com/rkinnovate/dev-setup"
-echo "  cd dev-setup"
-echo "  make install"
+echo "Update devsetup anytime with: devsetup update"
 echo ""
 echo "Happy coding! 🚀"
