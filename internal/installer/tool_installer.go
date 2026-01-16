@@ -15,7 +15,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/rkinnovate/dev-setup/internal/config"
 	"github.com/rkinnovate/dev-setup/internal/ui"

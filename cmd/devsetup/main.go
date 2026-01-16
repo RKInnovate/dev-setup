@@ -278,18 +278,18 @@ Use --check to only check for updates without installing.`,
 		progressUI := ui.NewProgressUI()
 
 		// Create updater
-		upd := updater.NewUpdater(version, progressUI)
+		upd := updater.NewUpdater(version)
 
 		if checkOnly {
 			// Check for updates only
-			hasUpdate, latestVersion, err := upd.CheckForUpdate()
+			release, err := upd.CheckForUpdate()
 			if err != nil {
 				progressUI.Error("❌ Failed to check for updates: %v", err)
 				os.Exit(1)
 			}
 
-			if hasUpdate {
-				progressUI.Info("🎉 New version available: %s", latestVersion)
+			if release != nil {
+				progressUI.Info("🎉 New version available: %s", release.TagName)
 				progressUI.Info("Run 'devsetup update' to install")
 			} else {
 				progressUI.Success("✅ You're running the latest version (%s)", version)
@@ -297,8 +297,22 @@ Use --check to only check for updates without installing.`,
 			return
 		}
 
+		// Check for updates first
+		release, err := upd.CheckForUpdate()
+		if err != nil {
+			progressUI.Error("❌ Failed to check for updates: %v", err)
+			os.Exit(1)
+		}
+
+		if release == nil {
+			progressUI.Success("✅ You're already running the latest version (%s)", version)
+			return
+		}
+
+		progressUI.Info("📦 Updating to version %s...", release.TagName)
+
 		// Perform update
-		if err := upd.Update(); err != nil {
+		if err := upd.Update(release); err != nil {
 			progressUI.Error("❌ Update failed: %v", err)
 			os.Exit(1)
 		}
