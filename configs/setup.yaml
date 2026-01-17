@@ -24,7 +24,6 @@ setup_tasks:
         description: "Claude CLI is installed"
       - env_var: CLAUDE_API_KEY
         description: "Claude API key is configured"
-    depends_on: [claude-code]
 
   # Git Configuration
   - name: git-config
@@ -41,7 +40,6 @@ setup_tasks:
     verify:
       - file_exists: ~/.gitconfig
         description: "Git configuration file exists"
-    depends_on: [git]
 
   # Zsh Plugin: Syntax Highlighting
   - name: zsh-syntax-highlighting
@@ -68,7 +66,7 @@ setup_tasks:
   # Configure Zsh with plugins and starship
   - name: configure-zsh
     description: "Add plugins and starship to .zshrc"
-    depends_on: [zsh-syntax-highlighting, zsh-autosuggestions, starship]
+    depends_on: [zsh-syntax-highlighting, zsh-autosuggestions]
     zshrc_lines:
       - comment: '# Load zsh-autosuggestions'
         content: 'source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh'
@@ -93,7 +91,6 @@ setup_tasks:
   # Configure Starship
   - name: configure-starship
     description: "Setup starship preset and enable private packages"
-    depends_on: [starship]
     steps:
       - command: mkdir -p ~/.config
         description: "Ensure config directory exists"
@@ -121,7 +118,6 @@ setup_tasks:
   # Configure Gemini API Key
   - name: gemini-api-key
     description: "Configure Gemini API key"
-    depends_on: [gemini-cli]
     interactive: true
     prompt:
       message: "Enter your Gemini API key (or press Enter to skip)"
