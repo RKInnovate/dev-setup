@@ -22,8 +22,14 @@ setup_tasks:
     verify:
       - command: command -v claude
         description: "Claude CLI is installed"
-      - env_var: CLAUDE_API_KEY
-        description: "Claude API key is configured"
+      - file_exists: ~/.claude/anthropic.sh
+        description: "Claude API key file exists"
+      - file_exists: ~/.claude/settings.json
+        description: "Claude settings file exists"
+      - file_contains:
+          path: ~/.claude/settings.json
+          text: 'apiKeyHelper'
+          description: "Claude settings uses apiKeyHelper"
 
   # Git Configuration
   - name: git-config
