@@ -1,0 +1,139 @@
+# File: configs/setup.yaml
+# Purpose: Configure installed tools (setup phase - may be interactive)
+# Problem: Tools need configuration after installation (API keys, dotfiles, etc)
+# Role: Defines post-install configuration steps
+# Usage: Loaded by `devsetup setup` command
+# Design choices: Remote-first with local fallback; interactive prompts for API keys; idempotent file edits
+# Assumptions: Tools already installed; user present for interactive prompts
+
+setup_tasks:
+  # Claude Standard Environment
+  - name: claude-standard-env
+    description: "Setup Claude and configure API key"
+    strategy: remote_first
+    remote:
+      command: bash -c "$(curl -fsSL https://raw.githubusercontent.com/RKInnovate/claude-standard-env/main/setup.sh)"
+      timeout: 300s
+    local:
+      command: bash ./external/claude-standard-env/setup.sh
+      timeout: 300s
+    interactive: true
+    optional: true
+    verify:
+      - command: command -v claude
+        description: "Claude CLI is installed"
+      - env_var: CLAUDE_API_KEY
+        description: "Claude API key is configured"
+    depends_on: [claude-code]
+
+  # Git Configuration
+  - name: git-config
+    description: "Configure git settings, aliases, and conventions"
+    strategy: remote_first
+    remote:
+      command: sh -c "$(curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh)"
+      timeout: 180s
+    local:
+      command: sh ./external/git-config/install.sh
+      timeout: 180s
+    interactive: true
+    optional: true
+    verify:
+      - file_exists: ~/.gitconfig
+        description: "Git configuration file exists"
+    depends_on: [git]
+
+  # Zsh Plugin: Syntax Highlighting
+  - name: zsh-syntax-highlighting
+    description: "Fish shell-like syntax highlighting for Zsh"
+    strategy: local_only
+    install:
+      - mkdir -p ~/.zsh
+      - cp -r ./third-party/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+    verify:
+      - file_exists: ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+        description: "Syntax highlighting plugin is installed"
+
+  # Zsh Plugin: Auto-suggestions
+  - name: zsh-autosuggestions
+    description: "Fish-like autosuggestions for Zsh"
+    strategy: local_only
+    install:
+      - mkdir -p ~/.zsh
+      - cp -r ./third-party/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+    verify:
+      - file_exists: ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+        description: "Auto-suggestions plugin is installed"
+
+  # Configure Zsh with plugins and starship
+  - name: configure-zsh
+    description: "Add plugins and starship to .zshrc"
+    depends_on: [zsh-syntax-highlighting, zsh-autosuggestions, starship]
+    zshrc_lines:
+      - comment: '# Load zsh-autosuggestions'
+        content: 'source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh'
+      - comment: '# Load zsh-syntax-highlighting (must be last)'
+        content: 'source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
+      - comment: '# Initialize starship prompt'
+        content: 'eval "$(starship init zsh)"'
+    verify:
+      - file_contains:
+          path: ~/.zshrc
+          text: 'source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh'
+          description: "Zsh autosuggestions is sourced"
+      - file_contains:
+          path: ~/.zshrc
+          text: 'source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
+          description: "Zsh syntax highlighting is sourced"
+      - file_contains:
+          path: ~/.zshrc
+          text: 'eval "$(starship init zsh)"'
+          description: "Starship is initialized"
+
+  # Configure Starship
+  - name: configure-starship
+    description: "Setup starship preset and enable private packages"
+    depends_on: [starship]
+    steps:
+      - command: mkdir -p ~/.config
+        description: "Ensure config directory exists"
+
+      - command: starship preset plain-text-symbols -o ~/.config/starship.toml
+        creates: ~/.config/starship.toml
+        description: "Generate starship config"
+
+      - edit_toml:
+          file: ~/.config/starship.toml
+          section: package
+          key: display_private
+          value: true
+          description: "Enable display of private packages"
+    verify:
+      - file_exists: ~/.config/starship.toml
+        description: "Starship config file exists"
+      - toml_value:
+          file: ~/.config/starship.toml
+          section: package
+          key: display_private
+          equals: true
+          description: "Private package display is enabled"
+
+  # Configure Gemini API Key
+  - name: gemini-api-key
+    description: "Configure Gemini API key"
+    depends_on: [gemini-cli]
+    interactive: true
+    prompt:
+      message: "Enter your Gemini API key (or press Enter to skip)"
+      env_var: GEMINI_API_KEY
+      add_to: ~/.zshrc
+      format: 'export GEMINI_API_KEY="{value}"'
+      skip_if_set: true
+    optional: true
+    verify:
+      - env_var: GEMINI_API_KEY
+        description: "Gemini API key is set"
+      - file_contains:
+          path: ~/.zshrc
+          text: 'export GEMINI_API_KEY='
+          description: "Gemini API key is in .zshrc"

@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -59,6 +61,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -79,6 +83,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -103,49 +109,41 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Validate YAML configs
         run: |
           # Install yq for YAML validation
           brew install yq
 
-          # Validate stage configs
-          for file in configs/*.yaml; do
-            echo "Validating $file..."
-            yq eval '.' "$file" > /dev/null || exit 1
-          done
+          # Validate new config files
+          echo "Validating configs/tools.yaml..."
+          yq eval '.' configs/tools.yaml > /dev/null || exit 1
+          echo "✅ tools.yaml is valid YAML"
 
-      - name: Validate TOML configs
-        run: |
-          # Validate versions.lock using Python's built-in tomllib (Python 3.11+)
-          echo "Validating versions.lock..."
-          python3 -c "
-          import sys
-          try:
-              # Python 3.11+ has tomllib built-in
-              import tomllib
-              with open('versions.lock', 'rb') as f:
-                  tomllib.load(f)
-              print('✅ versions.lock is valid TOML')
-          except ImportError:
-              # Fallback for Python < 3.11: try toml package
-              try:
-                  import toml
-                  with open('versions.lock', 'r') as f:
-                      toml.load(f)
-                  print('✅ versions.lock is valid TOML')
-              except ImportError:
-                  print('⚠️  No TOML parser available, skipping validation')
-                  sys.exit(0)
-          except Exception as e:
-              print(f'❌ versions.lock is invalid: {e}')
-              sys.exit(1)
-          "
+          echo "Validating configs/setup.yaml..."
+          yq eval '.' configs/setup.yaml > /dev/null || exit 1
+          echo "✅ setup.yaml is valid YAML"
 
-      - name: Validate Brewfile
+      - name: Verify git submodules
         run: |
-          echo "Validating Brewfile..."
-          # Basic syntax check
-          if [ -f Brewfile ]; then
-            grep -E '^(tap|brew|cask)' Brewfile || echo "Brewfile appears valid"
+          echo "Checking git submodules..."
+          git submodule status
+
+          # Verify submodules are initialized
+          if [ -z "$(git submodule status)" ]; then
+            echo "❌ No submodules found"
+            exit 1
           fi
+
+          echo "✅ Git submodules initialized"
+
+      - name: Verify embedded configs
+        run: |
+          echo "Verifying configs can be embedded..."
+          if [ ! -f configs/embed.go ]; then
+            echo "❌ configs/embed.go not found"
+            exit 1
+          fi
+          echo "✅ configs/embed.go exists"

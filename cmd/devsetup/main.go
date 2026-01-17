@@ -1,10 +1,9 @@
 // File: cmd/devsetup/main.go
 // Purpose: CLI entry point for dev-setup tool - orchestrates developer environment setup
 // Problem: Manual dev environment setup takes days; this tool reduces it to 30 minutes
-// Role: Main command-line interface using Cobra for subcommands (install, verify, doctor, update)
-// Usage: Run `devsetup install` to setup environment, `devsetup verify` to check consistency
-// Design choices: Three-stage incremental setup (5min critical → 10min full → 15min polish)
-//                 Uses Cobra for professional CLI, supports parallel execution via goroutines
+// Role: Main command-line interface using Cobra for subcommands (install, setup, verify, status, update)
+// Usage: Run `devsetup install` to install tools, `devsetup setup` to configure
+// Design choices: Install/setup separation; idempotency; parallel execution; state tracking
 // Assumptions: macOS host with internet access; Homebrew will be installed if missing
 
 package main
@@ -16,8 +15,11 @@ import (
 	"github.com/rkinnovate/dev-setup/configs"
 	"github.com/rkinnovate/dev-setup/internal/config"
 	"github.com/rkinnovate/dev-setup/internal/installer"
+	"github.com/rkinnovate/dev-setup/internal/setup"
+	"github.com/rkinnovate/dev-setup/internal/status"
 	"github.com/rkinnovate/dev-setup/internal/ui"
 	"github.com/rkinnovate/dev-setup/internal/updater"
+	"github.com/rkinnovate/dev-setup/internal/verify"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +29,7 @@ func init() {
 }
 
 // version is set during build via -ldflags
-var version = "0.1.0-dev"
+var version = "2.0.0"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -36,258 +38,333 @@ var rootCmd = &cobra.Command{
 	Long: `devsetup: Zero to productive developer in 5 minutes
 
 Complete development environment setup with:
-- Parallel installation (8+ concurrent tasks)
-- Incremental stages (productive immediately, complete in background)
-- Automatic verification and issue fixing
-- Version-locked dependencies (zero "works on my machine" issues)
-- Single source of truth (Brewfile + versions.lock)
+- Idempotent tool installation (check before install)
+- Post-install configuration (interactive where needed)
+- Accurate verification (no false positives)
+- Version-locked dependencies via git submodules
+- Single source of truth (tools.yaml + setup.yaml)
 
-Stages:
-  Stage 1 (5 min):  Critical path - developer can code immediately
-  Stage 2 (10 min): Full stack - runs in background
-  Stage 3 (15 min): Polish - optional tools, runs in background`,
+Commands:
+  install  Install all tools from tools.yaml
+  setup    Configure installed tools (interactive)
+  verify   Verify installation and configuration
+  status   Show current environment status
+  update   Update devsetup binary`,
 	Version: version,
 }
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install development environment",
-	Long: `Install development environment in three stages:
+	Short: "Install all tools",
+	Long: `Install all tools defined in tools.yaml.
 
-Stage 1 (5 min, blocking):  Critical tools - Git, Node, Python, Editor
-Stage 2 (10 min, background): Full development stack
-Stage 3 (15 min, background): Optional tools, fonts, polish
+Features:
+- Idempotent: Checks if tool exists before installing
+- Parallel: Tools in same parallel_group install concurrently
+- Dependencies: Respects depends_on relationships
+- State tracking: Saves installation state to ~/.local/share/devsetup/state.json
 
-After Stage 1 completes, you can immediately start coding while
-Stages 2 and 3 complete in the background.`,
+After installation completes, run 'devsetup setup' to configure tools.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fast, _ := cmd.Flags().GetBool("fast")
-		skipOptional, _ := cmd.Flags().GetBool("skip-optional")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-		// Initialize UI with rich progress indicators
+		// Initialize UI
 		progressUI := ui.NewProgressUI()
 		progressUI.PrintBanner()
 
-		// Initialize installer
-		inst := installer.NewInstaller(progressUI, dryRun)
+		// Load configurations
+		toolsConfig, err := config.LoadToolsConfig("configs/tools.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load tools config: %v", err)
+			os.Exit(1)
+		}
 
-		// Stage 1: Critical Path (blocks until complete)
-		progressUI.StartStage("Stage 1: Critical Path", "5 minutes")
-		if err := inst.RunStage("configs/stage1.yaml"); err != nil {
-			progressUI.Error("❌ Stage 1 failed: %v", err)
+		// Load state
+		state, err := config.LoadState()
+		if err != nil {
+			progressUI.Error("❌ Failed to load state: %v", err)
+			os.Exit(1)
+		}
+
+		// Create installer
+		toolInstaller := installer.NewToolInstaller(toolsConfig, state, progressUI, dryRun, version)
+
+		// Install all tools
+		if err := toolInstaller.InstallAll(); err != nil {
+			progressUI.Error("❌ Installation failed: %v", err)
 			progressUI.Info("Run 'devsetup doctor' to diagnose issues")
 			os.Exit(1)
 		}
-		progressUI.Success("✅ Stage 1 complete! You can now start coding.")
-		progressUI.Info("")
-		progressUI.Info("👨‍💻 READY TO CODE:")
-		progressUI.Info("  • Clone your repos: git clone ...")
-		progressUI.Info("  • Install dependencies: pnpm install / uv sync")
-		progressUI.Info("  • Start coding: zed .")
-		progressUI.Info("")
 
-		// Don't run additional stages in fast mode
-		if fast {
-			progressUI.Info("⚡ Fast mode: Skipping Stages 2 & 3")
-			progressUI.Info("   Run 'devsetup install' without --fast to complete setup")
-			return
+		progressUI.Info("Next step: Run 'devsetup setup' to configure tools")
+	},
+}
+
+// setupCmd represents the setup command
+var setupCmd = &cobra.Command{
+	Use:   "setup",
+	Short: "Configure installed tools",
+	Long: `Configure installed tools defined in setup.yaml.
+
+Features:
+- Interactive: Prompts for API keys and configuration
+- Remote-first: Tries remote scripts, falls back to local submodules
+- File operations: Edits .zshrc, starship.toml, etc.
+- Verification: Checks configuration succeeded
+- State tracking: Saves setup state
+
+This command may prompt you for:
+- API keys (Claude, Gemini)
+- Git configuration (name, email)
+- Shell preferences
+
+Run 'devsetup setup --help' for options.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		// Initialize UI
+		progressUI := ui.NewProgressUI()
+
+		// Load configurations
+		setupConfig, err := config.LoadSetupConfig("configs/setup.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load setup config: %v", err)
+			os.Exit(1)
 		}
 
-		// Stage 2: Full Stack (background)
-		progressUI.Info("📦 Stage 2 starting in background (you can work now)...")
-		go func() {
-			progressUI.StartStage("Stage 2: Full Development Stack", "10 minutes")
-			if err := inst.RunStage("configs/stage2.yaml"); err != nil {
-				progressUI.Warning("⚠️  Stage 2 had issues: %v", err)
-				progressUI.Info("   Run 'devsetup verify --fix' to resolve")
-			} else {
-				progressUI.Success("✅ Stage 2 complete! Full development stack ready.")
-			}
+		// Load state
+		state, err := config.LoadState()
+		if err != nil {
+			progressUI.Error("❌ Failed to load state: %v", err)
+			os.Exit(1)
+		}
 
-			// Stage 3: Polish (background)
-			if !skipOptional {
-				progressUI.StartStage("Stage 3: Polish & Optional Tools", "15 minutes")
-				if err := inst.RunStage("configs/stage3.yaml"); err != nil {
-					progressUI.Warning("⚠️  Stage 3 had issues: %v", err)
-				} else {
-					progressUI.Success("🎉 Stage 3 complete! Professional environment ready!")
-				}
-			}
-		}()
+		// Create setup executor
+		setupExecutor := setup.NewSetupExecutor(setupConfig, state, progressUI, dryRun)
 
-		// Keep main goroutine alive to show background progress
-		progressUI.Info("")
-		progressUI.Info("📊 Monitor progress: devsetup status")
-		progressUI.Info("🔍 Verify environment: devsetup verify")
-		progressUI.Info("")
+		// Execute all setup tasks
+		if err := setupExecutor.SetupAll(); err != nil {
+			progressUI.Error("❌ Setup failed: %v", err)
+			os.Exit(1)
+		}
 
-		// Wait for background stages (in real implementation)
-		// For now, we'll exit and let goroutines finish
-		// TODO: Add proper status tracking and wait mechanism
+		progressUI.Info("Next step: Run 'devsetup verify' to check everything works")
 	},
 }
 
 // verifyCmd represents the verify command
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
-	Short: "Verify environment matches versions.lock",
-	Long: `Verify that installed tools match the versions specified in:
-  - Brewfile.lock.json (Homebrew packages)
-  - versions.lock (other tools)
+	Short: "Verify environment matches configuration",
+	Long: `Verify that installed tools and configuration match expectations.
 
-Reports any mismatches and optionally fixes them with --fix flag.`,
+Checks:
+- Tool binaries exist and are accessible
+- Configuration files have expected content
+- Environment variables are set
+- TOML values match expected values
+
+This command provides accurate verification without false positives.
+
+Exit codes:
+  0 - All checks passed
+  1 - One or more checks failed`,
 	Run: func(cmd *cobra.Command, args []string) {
-		autoFix, _ := cmd.Flags().GetBool("fix")
-
+		// Initialize UI
 		progressUI := ui.NewProgressUI()
-		progressUI.Info("🔍 Verifying environment consistency...")
 
-		// TODO: Implement verification logic
-		progressUI.Success("✅ Environment verification PASSED")
-		progressUI.Info("All tools match expected versions")
-
-		if autoFix {
-			progressUI.Info("Auto-fix enabled but no issues found")
+		// Load configurations
+		toolsConfig, err := config.LoadToolsConfig("configs/tools.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load tools config: %v", err)
+			os.Exit(1)
 		}
-	},
-}
 
-// doctorCmd represents the doctor command
-var doctorCmd = &cobra.Command{
-	Use:   "doctor",
-	Short: "Run health checks and diagnostics",
-	Long: `Run comprehensive health checks:
-  - Verify Homebrew installation and health
-  - Check tool versions and availability
-  - Validate shell configuration
-  - Check PATH and environment variables
-  - Diagnose common issues`,
-	Run: func(cmd *cobra.Command, args []string) {
-		progressUI := ui.NewProgressUI()
-		progressUI.Info("🏥 Running environment diagnostics...")
-		progressUI.Info("")
+		setupConfig, err := config.LoadSetupConfig("configs/setup.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load setup config: %v", err)
+			os.Exit(1)
+		}
 
-		// TODO: Implement doctor checks
-		progressUI.Success("✅ Homebrew: Installed and healthy")
-		progressUI.Success("✅ Git: Configured properly")
-		progressUI.Success("✅ Node + pnpm: Available")
-		progressUI.Success("✅ Python + uv: Available")
-		progressUI.Success("✅ Shell: zsh configured")
+		// Load state
+		state, err := config.LoadState()
+		if err != nil {
+			progressUI.Error("❌ Failed to load state: %v", err)
+			os.Exit(1)
+		}
+
+		// Create verifier
+		verifier := verify.NewVerifier(toolsConfig, setupConfig, state, progressUI)
+
+		// Verify all
+		result, err := verifier.VerifyAll()
+		if err != nil {
+			progressUI.Info("")
+			progressUI.Info("Summary:")
+			progressUI.Info("  Tools: %d OK, %d failed", result.ToolsOK, result.ToolsFailed)
+			progressUI.Info("  Setup: %d OK, %d failed", result.SetupOK, result.SetupFailed)
+			os.Exit(1)
+		}
+
 		progressUI.Info("")
-		progressUI.Success("🎉 All checks passed!")
+		progressUI.Success("Environment verified successfully!")
 	},
 }
 
 // statusCmd represents the status command
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show installation status",
-	Long:  `Display current installation status and background task progress`,
-	Run: func(cmd *cobra.Command, args []string) {
-		progressUI := ui.NewProgressUI()
-		progressUI.Info("📊 Installation Status:")
-		progressUI.Info("")
+	Short: "Show current environment status",
+	Long: `Display current installation and configuration status.
 
-		// TODO: Implement status tracking
-		progressUI.Success("✅ Stage 1: Complete")
-		progressUI.Info("⚡ Stage 2: In progress (75%%)")
-		progressUI.Info("⏳ Stage 3: Queued")
+Shows:
+- Installed tools with versions and paths
+- Configured tasks
+- Overall completion percentage
+- Next steps to complete setup
+
+This command reads from state.json and provides accurate status reporting.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Initialize UI
+		progressUI := ui.NewProgressUI()
+
+		// Load configurations
+		toolsConfig, err := config.LoadToolsConfig("configs/tools.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load tools config: %v", err)
+			os.Exit(1)
+		}
+
+		setupConfig, err := config.LoadSetupConfig("configs/setup.yaml")
+		if err != nil {
+			progressUI.Error("❌ Failed to load setup config: %v", err)
+			os.Exit(1)
+		}
+
+		// Load state
+		state, err := config.LoadState()
+		if err != nil {
+			progressUI.Error("❌ Failed to load state: %v", err)
+			os.Exit(1)
+		}
+
+		// Create reporter
+		reporter := status.NewReporter(toolsConfig, setupConfig, state, progressUI)
+
+		// Show status
+		reporter.ShowStatus()
 	},
 }
 
 // updateCmd represents the update command
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update devsetup tool and refresh versions",
-	Long: `Update the devsetup tool itself and optionally capture current
-installed versions to versions.lock file.`,
+	Short: "Update devsetup binary",
+	Long: `Check for and install the latest version of devsetup.
+
+This command:
+- Checks GitHub releases for newer versions
+- Downloads the appropriate binary for your architecture
+- Verifies SHA256 checksum
+- Atomically replaces current binary
+- Creates backup of old version
+
+Use --check to only check for updates without installing.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		captureVersions, _ := cmd.Flags().GetBool("capture-versions")
 		checkOnly, _ := cmd.Flags().GetBool("check")
 
+		// Initialize UI
 		progressUI := ui.NewProgressUI()
 
-		if captureVersions {
-			progressUI.Info("📸 Capturing current installed versions...")
-			// TODO: Implement version capture
-			progressUI.Success("✅ versions.lock updated with current versions")
-			progressUI.Info("   Commit this file to lock versions for all developers")
+		// Create updater
+		upd := updater.NewUpdater(version)
+
+		if checkOnly {
+			// Check for updates only
+			release, err := upd.CheckForUpdate()
+			if err != nil {
+				progressUI.Error("❌ Failed to check for updates: %v", err)
+				os.Exit(1)
+			}
+
+			if release != nil {
+				progressUI.Info("🎉 New version available: %s", release.TagName)
+				progressUI.Info("Run 'devsetup update' to install")
+			} else {
+				progressUI.Success("✅ You're running the latest version (%s)", version)
+			}
 			return
 		}
 
-		// Self-update flow
-		progressUI.Info("🔄 Checking for devsetup updates...")
-		progressUI.Info("")
-
-		upd := updater.NewUpdater(version)
+		// Check for updates first
 		release, err := upd.CheckForUpdate()
-
 		if err != nil {
-			progressUI.Error("Failed to check for updates: %v", err)
-			progressUI.Info("You can manually download from: https://github.com/rkinnovate/dev-setup/releases")
+			progressUI.Error("❌ Failed to check for updates: %v", err)
 			os.Exit(1)
 		}
 
 		if release == nil {
-			progressUI.Success("✅ Already on latest version: %s", version)
+			progressUI.Success("✅ You're already running the latest version (%s)", version)
 			return
 		}
 
-		// Update available
-		progressUI.Info("🎉 New version available: %s (current: %s)", release.TagName, version)
-		progressUI.Info("")
-		progressUI.Info("Release notes:")
-		progressUI.Info("%s", updater.GetReleaseNotes(release))
-		progressUI.Info("")
-
-		if checkOnly {
-			progressUI.Info("Run 'devsetup update' without --check to install")
-			return
-		}
+		progressUI.Info("📦 Updating to version %s...", release.TagName)
 
 		// Perform update
-		progressUI.Info("📥 Downloading devsetup %s...", release.TagName)
 		if err := upd.Update(release); err != nil {
-			progressUI.Error("Update failed: %v", err)
-			progressUI.Info("You can manually download from: https://github.com/rkinnovate/dev-setup/releases")
+			progressUI.Error("❌ Update failed: %v", err)
 			os.Exit(1)
 		}
 
-		progressUI.Success("✅ Successfully updated to %s!", release.TagName)
-		progressUI.Info("")
-		progressUI.Info("Restart devsetup to use the new version:")
-		progressUI.Info("  devsetup --version")
+		progressUI.Success("✅ Update complete!")
+		progressUI.Info("Please restart your terminal or run 'devsetup --version' to verify")
 	},
 }
 
-// init initializes all commands and flags
-func init() {
-	// Add flags to installCmd
-	installCmd.Flags().Bool("fast", false, "Stage 1 only - skip background stages (5 min)")
-	installCmd.Flags().Bool("skip-optional", false, "Skip Stage 3 (polish/optional tools)")
-	installCmd.Flags().Bool("dry-run", false, "Show what would be installed without installing")
+// doctorCmd represents the doctor command
+var doctorCmd = &cobra.Command{
+	Use:   "doctor",
+	Short: "Run diagnostics",
+	Long: `Run diagnostic checks to identify environment issues.
 
-	// Add flags to verifyCmd
-	verifyCmd.Flags().Bool("fix", false, "Automatically fix any mismatches found")
+Checks:
+- Homebrew installation and health
+- Required tools accessibility
+- Configuration file validity
+- State file integrity
+- Common path issues
 
-	// Add flags to updateCmd
-	updateCmd.Flags().Bool("capture-versions", false, "Capture current versions to versions.lock")
-	updateCmd.Flags().Bool("check", false, "Check for updates without installing")
-
-	// Add all commands to root
-	rootCmd.AddCommand(installCmd)
-	rootCmd.AddCommand(verifyCmd)
-	rootCmd.AddCommand(doctorCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(updateCmd)
+This command helps troubleshoot installation problems.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		progressUI := ui.NewProgressUI()
+		progressUI.Info("🔧 Running diagnostics...")
+		progressUI.Info("")
+		progressUI.Warning("⚠️  Doctor command not yet fully implemented")
+		progressUI.Info("For now, try:")
+		progressUI.Info("  • devsetup verify - Check installation status")
+		progressUI.Info("  • devsetup status - Show what's installed")
+		progressUI.Info("  • brew doctor - Check Homebrew health")
+	},
 }
 
-// main is the entry point for the CLI
 func main() {
+	// Add flags
+	installCmd.Flags().Bool("dry-run", false, "Show what would be installed without installing")
+	setupCmd.Flags().Bool("dry-run", false, "Show what would be configured without configuring")
+	updateCmd.Flags().Bool("check", false, "Check for updates without installing")
+
+	// Add commands
+	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(setupCmd)
+	rootCmd.AddCommand(verifyCmd)
+	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(doctorCmd)
+
+	// Execute
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }

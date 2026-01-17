@@ -1,0 +1,15 @@
+[submodule "external/claude-standard-env"]
+	path = external/claude-standard-env
+	url = https://github.com/RKInnovate/claude-standard-env
+[submodule "external/git-config"]
+	path = external/git-config
+	url = https://github.com/BadRat-in/git-config
+[submodule "external/flutter-wrapper"]
+	path = external/flutter-wrapper
+	url = https://github.com/BadRat-in/flutter-wrapper
+[submodule "third-party/zsh-syntax-highlighting"]
+	path = third-party/zsh-syntax-highlighting
+	url = https://github.com/zsh-users/zsh-syntax-highlighting
+[submodule "third-party/zsh-autosuggestions"]
+	path = third-party/zsh-autosuggestions
+	url = https://github.com/zsh-users/zsh-autosuggestions

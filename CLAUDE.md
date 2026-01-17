@@ -9,12 +9,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Zero tolerance for "it works on my machine" excuses.**
 
 This repository ensures **exact environment replication** across all developer machines through:
-- Automated, three-stage progressive setup (5min critical → 10min full → 15min polish)
-- Parallel task execution (8+ concurrent tasks) for maximum speed
-- Version-locked dependencies (Brewfile.lock.json + versions.lock)
+- Automated install → setup → verify workflow
+- Idempotent tool installation (check before install, never reinstall)
+- Interactive post-install configuration with remote-first/local-fallback
+- Parallel task execution within groups for maximum speed
+- Git submodules for version-locked external dependencies
 - Strict package manager enforcement (pnpm for Node.js, uv for Python)
 - Self-updating binary with GitHub releases
-- Comprehensive verification and diagnostics
+- Accurate verification without false positives
 
 ---
 
@@ -77,34 +79,45 @@ Before creating **any commits or pull requests**, you MUST review and comply wit
 
 ## 🔧 Project Overview
 
-This is a **macOS development environment bootstrap tool** written in Go that reduces developer setup time from **days to 30 minutes** (productive in just 5 minutes!). It uses a three-stage progressive installation approach with parallel task execution.
+This is a **macOS development environment bootstrap tool** written in Go that reduces developer setup time from **days to 30 minutes**. It uses a clean install → setup → verify workflow with idempotent operations and parallel execution.
 
 ### Key Technology Stack
 
 - **Language**: Go 1.21+
 - **CLI Framework**: Cobra (professional CLI with subcommands)
-- **Configuration**: YAML (stage configs) + TOML (version locking)
+- **Configuration**: YAML (tools.yaml + setup.yaml)
+- **Dependencies**: Git submodules for external tools (claude-standard-env, git-config, flutter-wrapper, zsh plugins)
 - **Deployment**: Single binary, auto-updates via GitHub releases
 - **CI/CD**: GitHub Actions (tests, linting, releases)
 - **Package Manager**: Homebrew (for macOS tools)
 
-### What Gets Installed
+### Architecture: Install → Setup → Verify
 
-**Stage 1 (5 min, blocking - developer productive):**
-- Homebrew + Git, Node, pnpm, Python, uv
-- Zed editor
-- Essential CLI tools
+**1. Install (`devsetup install`)**
+- Installs all tools from `tools.yaml`
+- Idempotent: checks if tool exists before installing (never reinstalls)
+- Parallel execution within groups for speed
+- Dependency resolution via topological sort
+- State tracking in `~/.local/share/devsetup/state.json`
 
-**Stage 2 (10 min, background - full stack):**
-- Flutter wrapper (`flutterw`)
-- Zsh plugins (completions, syntax highlighting, etc.)
-- Starship prompt
-- Development utilities
+**2. Setup (`devsetup setup`)**
+- Post-install configuration from `setup.yaml`
+- Interactive prompts for API keys and configuration
+- Remote-first with local fallback (prefers latest, works offline)
+- File operations: edits .zshrc, starship.toml, etc.
+- Runs setup scripts from git submodules
 
-**Stage 3 (15 min, background - polish):**
-- Fonts (Hack Nerd Font)
-- AI CLIs (Codex, Gemini, Claude)
-- Docker and optional tools
+**3. Verify (`devsetup verify`)**
+- Accurate verification without false positives
+- Checks actual tool existence and versions
+- Verifies configuration files have expected content
+- No reliance on state alone - runs real checks
+
+**4. Status (`devsetup status`)**
+- Shows installed tools with versions
+- Displays configured tasks
+- Calculates accurate completion percentage
+- Suggests next steps
 
 ---
 
@@ -149,27 +162,18 @@ go tool cover -html=coverage.out
 ### Using devsetup
 
 ```bash
-# Install development environment
-devsetup install
+# Complete installation workflow
+devsetup install          # Install all tools from tools.yaml
+devsetup setup            # Configure tools (interactive)
+devsetup verify           # Verify installation and configuration
+devsetup status           # Show current environment status
 
-# Fast mode (Stage 1 only - 5 minutes)
-devsetup install --fast
-
-# Skip optional tools (Stages 1-2 only)
-devsetup install --skip-optional
-
-# Dry run (see what would be installed)
+# Dry run mode (see what would happen without doing it)
 devsetup install --dry-run
-
-# Verify environment matches versions.lock
-devsetup verify
-devsetup verify --fix  # Auto-fix mismatches
+devsetup setup --dry-run
 
 # Run diagnostics
 devsetup doctor
-
-# Check installation status
-devsetup status
 
 # Update devsetup binary
 devsetup update
@@ -177,12 +181,21 @@ devsetup update --check  # Check without installing
 
 # Show version
 devsetup --version
+
+# Show help
+devsetup --help
+devsetup install --help
+devsetup setup --help
 ```
 
 ### One-Line Install (for end users)
 
 ```bash
+# Bootstrap script downloads devsetup binary to ~/.local/bin and runs install
 curl -fsSL https://raw.githubusercontent.com/rkinnovate/dev-setup/main/bootstrap.sh | bash
+
+# After bootstrap completes, the devsetup binary is installed permanently
+# You can then run: devsetup setup, devsetup verify, devsetup status
 ```
 
 ---
@@ -194,99 +207,182 @@ curl -fsSL https://raw.githubusercontent.com/rkinnovate/dev-setup/main/bootstrap
 ```
 dev-setup/
 ├── cmd/devsetup/              # CLI entry point
-│   └── main.go               # Cobra commands (install, verify, doctor, update)
+│   └── main.go               # Cobra commands (install, setup, verify, status, update, doctor)
 ├── internal/                  # Internal packages (not importable)
 │   ├── config/               # Configuration loading and validation
-│   │   ├── models.go        # Data structures (StageConfig, Task, VersionsLock)
-│   │   ├── loader.go        # YAML/TOML parsers
-│   │   └── loader_test.go   # Config tests
-│   ├── installer/            # Installation orchestration
-│   │   ├── installer.go     # High-level stage management
+│   │   ├── tools_config.go  # Tools.yaml data structures + dependency resolution
+│   │   ├── setup_config.go  # Setup.yaml data structures
+│   │   ├── state.go         # State tracking (installed tools, configured tasks)
+│   │   ├── loader.go        # YAML parsers (legacy)
+│   │   └── *_test.go        # Config tests
+│   ├── installer/            # Tool installation orchestration
+│   │   ├── tool_installer.go # Idempotent installation with parallel execution
+│   │   ├── installer.go     # Legacy stage-based installer (being phased out)
 │   │   ├── parallel.go      # Parallel task execution engine
-│   │   ├── installer_test.go
-│   │   └── parallel_test.go
+│   │   └── *_test.go
+│   ├── setup/                # Post-install configuration
+│   │   └── setup_executor.go # Remote-first/local-fallback setup execution
+│   ├── verify/               # Verification engine
+│   │   └── verifier.go      # Accurate verification without false positives
+│   ├── status/               # Status reporting
+│   │   └── reporter.go      # Installation and configuration status display
 │   ├── updater/              # Self-update functionality
 │   │   ├── updater.go       # GitHub releases integration
 │   │   └── updater_test.go
-│   └── ui/                   # Terminal UI (progress bars, colors)
-│       └── progress.go
-├── configs/                   # Stage configuration files
-│   ├── stage1.yaml          # Critical path (5 min)
-│   ├── stage2.yaml          # Full stack (10 min)
-│   └── stage3.yaml          # Polish (15 min)
+│   └── ui/                   # Terminal UI
+│       ├── interface.go     # UI interface definition
+│       └── progress.go      # Progress UI implementation
+├── configs/                   # Configuration files (embedded in binary)
+│   ├── embed.go             # Go embed directive
+│   ├── tools.yaml           # Tool installation declarations
+│   └── setup.yaml           # Post-install setup tasks
+├── external/                  # Git submodules for external dependencies
+│   ├── claude-standard-env/ # Claude CLI + API key setup
+│   ├── git-config/          # Git configuration
+│   ├── flutter-wrapper/     # Flutter version management
+│   ├── zsh-syntax-highlighting/
+│   └── zsh-autosuggestions/
 ├── .github/workflows/         # CI/CD pipelines
 │   ├── ci.yml               # Tests, linting, builds
 │   └── release.yml          # Automated releases
-├── Brewfile                   # Homebrew package declarations
-├── versions.lock              # Version pinning (TOML)
-├── bootstrap.sh               # One-line installer script
+├── bootstrap.sh               # One-line installer (installs to ~/.local/bin)
 ├── Makefile                   # Build automation
 ├── go.mod / go.sum            # Go dependencies
 ├── README.md                  # User documentation
 ├── CONTRIBUTING.md            # Developer guide
 └── CLAUDE.md                  # This file
-
 ```
 
 ### Core Design Principles
 
-1. **Three-Stage Progressive Setup**
-   - Stage 1: Developer can start coding after 5 minutes
-   - Stages 2-3: Complete in background while developer works
-   - Minimizes time-to-productivity
+1. **Idempotent Installation**
+   - Every tool has a `check` command that verifies existence
+   - Installation only happens if check fails
+   - Safe to re-run install command multiple times
+   - State tracking in `~/.local/share/devsetup/state.json`
+   - Re-verification on each run (not just state check)
 
-2. **Parallel Task Execution**
-   - Tasks in same `parallel_group` run concurrently
-   - Semaphore pattern limits concurrency (max 8 concurrent)
-   - Sequential tasks run one at a time
-   - Goroutines + channels for coordination
+2. **Dependency Resolution**
+   - Tools declare dependencies via `depends_on` field
+   - Topological sort (Kahn's algorithm) determines install order
+   - Circular dependency detection
+   - Required vs optional tool handling
 
-3. **Version Locking**
-   - `Brewfile.lock.json`: Locks Homebrew package versions
-   - `versions.lock`: TOML file for git repos and tools
-   - Ensures identical versions across all machines
+3. **Parallel Task Execution**
+   - Tools in same `parallel_group` run concurrently
+   - Different groups run sequentially (respects dependencies)
+   - Goroutines + WaitGroup for coordination
+   - Error aggregation (first error fails group if required)
 
-4. **Idempotency**
-   - All operations safe to re-run
-   - Checks existence before installing
-   - Updates existing installations
+4. **Remote-First with Local Fallback**
+   - Setup tasks try remote scripts first (latest version)
+   - Falls back to local git submodules if remote fails
+   - Works offline with local copies
+   - Best of both worlds: latest + reliability
 
-5. **Self-Updating**
+5. **Git Submodules for External Dependencies**
+   - Version-locked external tools (claude-standard-env, git-config, flutter-wrapper)
+   - Proper version control for third-party scripts
+   - Easy updates via `git submodule update --remote`
+   - Single source of truth for dependency versions
+
+6. **Accurate Verification**
+   - Runs actual check commands (not just state comparison)
+   - No false positives from stale state
+   - Verifies configuration files contain expected content
+   - Checks environment variables are set
+   - TOML value validation (planned)
+
+7. **Self-Updating**
    - Checks GitHub releases for new versions
    - Downloads and atomically replaces binary
    - Preserves backup of old version
+   - Installed to ~/.local/bin permanently
 
 ### Key Packages Reference
 
 | Package | Purpose |
 |---------|---------|
-| `cmd/devsetup` | CLI entry point with Cobra commands |
-| `internal/config` | Configuration loading (YAML, TOML, Brewfile) |
-| `internal/installer` | Stage orchestration and parallel execution |
+| `cmd/devsetup` | CLI entry point with Cobra commands (install, setup, verify, status, update, doctor) |
+| `internal/config` | Configuration loading (tools.yaml, setup.yaml) + state tracking |
+| `internal/installer` | Tool installation with idempotency and parallel execution |
+| `internal/setup` | Post-install configuration with remote-first/local-fallback |
+| `internal/verify` | Accurate verification without false positives |
+| `internal/status` | Status reporting with accurate progress |
 | `internal/updater` | Self-update via GitHub releases |
-| `internal/ui` | Rich terminal UI (progress bars, colors) |
+| `internal/ui` | Terminal UI (progress bars, colors) with interface abstraction |
+
+### Embedded Configuration System (Critical for Binary Distribution)
+
+**Problem**: Downloaded binary needs config files but they're not on user's filesystem.
+
+**Solution**: Configs are embedded directly into the binary at build time using Go's `embed` package.
+
+**How It Works**:
+```go
+// configs/embed.go embeds all YAML files
+//go:embed *.yaml
+var ConfigFS embed.FS
+
+// main.go sets the embedded FS
+func init() {
+    config.SetEmbeddedFS(configs.ConfigFS)
+}
+
+// loader.go tries filesystem first, falls back to embedded
+func LoadStageConfig(path string) (*StageConfig, error) {
+    // Try filesystem first (for development)
+    if data, err := os.ReadFile(path); err == nil {
+        return parseYAML(data)
+    }
+
+    // Fall back to embedded (for distributed binary)
+    return loadFromEmbedded(path)
+}
+```
+
+**Why This Matters**:
+- Binary works standalone without external files
+- Development uses filesystem files (faster iteration)
+- Production uses embedded files (always consistent)
+- Users don't need to download config files separately
+
+**When Adding New Configs**:
+- Add YAML file to `configs/` directory
+- Embedding happens automatically via `//go:embed *.yaml`
+- Both filesystem and embedded paths work identically
+- No code changes needed in loader
 
 ### State & Path Locations
 
 ```
 ~/.local/
-├── bin/                          # Exposed executables (on PATH)
-│   └── flutterw -> ../share/dev-setup/flutter-wrapper/bin/flutter
+├── bin/                          # User binaries (on PATH)
+│   ├── devsetup                 # Main binary (installed by bootstrap.sh or make install)
+│   └── flutterw -> ...          # Symlink to Flutter wrapper (created by setup)
 ├── share/
 │   └── dev-setup/                # State directory
-│       ├── state.json            # Installation state
-│       ├── flutter-wrapper/      # Cloned from rkinnovate/flutter-wrapper
-│       ├── git-config/           # Cloned from rkinnovate/git-config
-│       └── zsh-plugins/          # Cloned Zsh plugins
-│           ├── zsh-completions/
-│           ├── zsh-syntax-highlighting/
-│           ├── zsh-autosuggestions/
-│           ├── zsh-history-substring-search/
-│           ├── zsh-interactive-cd/
-│           └── zsh-you-should-use/
+│       └── state.json            # Installation and configuration state
+│                                 # Format: { "installed": {...}, "configured": {...} }
 ~/.config/
-└── starship.toml                 # Starship prompt config
+└── starship.toml                 # Starship prompt config (edited by setup)
+
+~/.zshrc                           # Shell config (edited by setup to add PATH, load plugins)
+
+# External dependencies (git submodules in repo, not in ~/.local)
+dev-setup/external/
+├── claude-standard-env/          # Claude CLI + API key setup
+├── git-config/                   # Git global configuration
+├── flutter-wrapper/              # Flutter version manager (flutterw)
+├── zsh-syntax-highlighting/      # Zsh plugin
+└── zsh-autosuggestions/          # Zsh plugin
 ```
+
+**Key Locations:**
+- **Binary**: `~/.local/bin/devsetup` (added to PATH by bootstrap.sh)
+- **State**: `~/.local/share/devsetup/state.json` (tracks installed tools + configured tasks)
+- **Config**: Embedded in binary (configs/tools.yaml, configs/setup.yaml)
+- **External tools**: Git submodules in `external/` directory (version-locked)
 
 ---
 
@@ -438,6 +534,66 @@ if !p.checkCondition(ctx, task.Condition) {
    go tool cover -func=coverage.out
    ```
 
+### Testing with Mock UI
+
+The installer uses a `UI` interface for all user feedback, enabling comprehensive testing:
+
+```go
+// Real implementation
+type UI interface {
+    StartTask(name string)
+    CompleteTask(name string)
+    FailTask(name string, err error)
+    Info(format string, args ...interface{})
+    Warning(format string, args ...interface{})
+    Error(format string, args ...interface{})
+}
+
+// Mock for testing
+type mockUI struct {
+    mu sync.Mutex
+    tasks []string
+    errors []error
+}
+
+func (m *mockUI) StartTask(name string) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.tasks = append(m.tasks, name)
+}
+```
+
+**Writing Tests**:
+```go
+func TestParallelExecutor_Execute(t *testing.T) {
+    // Create mock UI
+    ui := &mockUI{}
+    executor := NewParallelExecutor(4, 30*time.Second, ui)
+
+    tasks := []config.Task{
+        {Name: "Task 1", Command: "echo test"},
+    }
+
+    // Execute tasks
+    err := executor.Execute(tasks)
+
+    // Verify UI interactions
+    if err != nil {
+        t.Fatalf("Expected no error, got: %v", err)
+    }
+
+    if len(ui.tasks) != 1 {
+        t.Errorf("Expected 1 task, got %d", len(ui.tasks))
+    }
+}
+```
+
+**Why This Pattern**:
+- Decouples business logic from UI presentation
+- Enables testing without terminal interaction
+- Allows capturing and verifying UI calls
+- Thread-safe mock implementation with mutex
+
 ### ⚠️ NEVER Commit:
 - Failing tests
 - Lint violations
@@ -517,65 +673,60 @@ if !p.checkCondition(ctx, task.Condition) {
 
 ## 🔨 Adding New Tools
 
-### 1. Add to Brewfile
+### 1. Add to tools.yaml
 
-```ruby
-# Brewfile
-brew "new-tool"
+```yaml
+# configs/tools.yaml
+tools:
+  - name: new-tool
+    check: command -v new-tool              # Idempotency check
+    install:
+      command: brew install new-tool
+      parallel_group: homebrew-cli          # Run with other Homebrew tools
+      timeout: 120s
+    depends_on: [homebrew]                  # Dependencies (optional)
+    required: false                         # Optional tool (won't fail install)
 ```
 
-### 2. Lock Homebrew versions
+**Key Fields:**
+- `check`: Command to verify tool exists (for idempotency)
+- `install.command`: Installation command
+- `install.parallel_group`: Group for parallel execution
+- `depends_on`: List of dependencies (installed first)
+- `required`: If true, failure stops installation
+
+### 2. Add post-install configuration (if needed)
+
+```yaml
+# configs/setup.yaml
+setup_tasks:
+  - name: configure-new-tool
+    zshrc_lines:
+      - comment: "# Initialize new-tool"
+        content: 'eval "$(new-tool init)"'
+    verify:
+      - command: "grep -q 'new-tool init' ~/.zshrc"
+```
+
+### Adding Git Submodules for External Tools
 
 ```bash
-brew bundle install
-brew bundle lock --lockfile=Brewfile.lock.json
-```
-
-### 3. Add to versions.lock
-
-```toml
-# versions.lock
-[homebrew.formulas.new-tool]
-version = "1.2.3"
-tap = "homebrew/core"
-```
-
-### 4. Add installation task to stage config
-
-```yaml
-# configs/stage2.yaml
-tasks:
-  - name: "Install new-tool"
-    command: "brew install new-tool"
-    parallel_group: "homebrew-tools"
-    required: false
-    timeout: 120s
-    condition: "! command -v new-tool"
-```
-
-### For Git Repositories
-
-```toml
-# versions.lock
-[git_repos.repo-name]
-url = "https://github.com/user/repo.git"
-commit = "abc123def456"
-path = "~/dev/repo-name"
-shallow = true
-stage = 2
+# Add new external dependency as submodule
+git submodule add https://github.com/user/repo external/repo-name
+git submodule update --init --recursive
 ```
 
 ```yaml
-# Stage config
-- name: "Clone repo-name"
-  command: |
-    if [ ! -d ~/dev/repo-name ]; then
-      git clone --depth=1 https://github.com/user/repo.git ~/dev/repo-name
-      cd ~/dev/repo-name && git checkout abc123def456
-    fi
-  parallel_group: "git-repos"
-  required: false
-  timeout: 180s
+# configs/setup.yaml
+- name: setup-external-tool
+  strategy: remote_first
+  remote:
+    command: 'bash -c "$(curl -fsSL https://raw.githubusercontent.com/user/repo/main/install.sh)"'
+    timeout: 180s
+  local:
+    command: bash ./external/repo-name/install.sh
+    timeout: 180s
+  interactive: true
 ```
 
 ---
@@ -596,41 +747,104 @@ go test ./internal/updater -v
 
 # Test with race detector
 go test -race ./...
+
+# Check test coverage by package
+go test -v -cover ./internal/config
+go test -v -cover ./internal/installer
+go test -v -cover ./internal/updater
 ```
 
-### Debugging
+### Debugging & Development
 
 ```bash
+# Dry run mode (see what would happen)
+./devsetup install --dry-run
+./devsetup setup --dry-run
+
+# Run with embedded configs (test binary distribution)
+./devsetup install
+
+# Run with filesystem configs (test config changes)
+# Automatically uses filesystem if files exist in configs/
+
+# Test individual commands
+go run ./cmd/devsetup install
+go run ./cmd/devsetup status
+go run ./cmd/devsetup verify
+
+# Inspect embedded files
+go list -f '{{.EmbedFiles}}' ./configs
+
+# Check state file
+cat ~/.local/share/devsetup/state.json | jq .
+
 # Verbose test output
 go test -v ./...
 
-# Run with dry-run
-./devsetup install --dry-run
-
 # Run diagnostics
 ./devsetup doctor
+
+# Test binary works as standalone
+rm -rf configs/  # Temporarily remove configs
+./devsetup --version  # Should still work (uses embedded)
+git restore configs/  # Restore configs
 ```
 
-### Modifying Stage Configurations
+### Modifying Configuration Files
 
-Stage configs are YAML files in `configs/`:
+**tools.yaml** (Installation configuration):
 
 ```yaml
-name: "Stage Name"
-timeout: 30m
-parallel: true
+tools:
+  - name: "tool-name"
+    check: "command -v tool-name"        # Idempotency check
+    install:
+      command: "brew install tool-name"  # Installation command
+      parallel_group: "homebrew-cli"     # Parallel execution group
+      timeout: 120s                      # Timeout (optional)
+    depends_on: [homebrew]               # Dependencies (optional)
+    required: false                      # Required vs optional
+```
 
-tasks:
-  - name: "Task Name"
-    command: "shell command"
-    parallel_group: "group-name"  # Tasks in same group run concurrently
-    required: true                 # Fail stage if this fails
-    timeout: 60s
-    retry_count: 2
-    condition: "test command"      # Skip if condition fails
+**setup.yaml** (Post-install configuration):
 
-post_stage:
-  message: "Stage complete!"
+```yaml
+setup_tasks:
+  - name: "task-name"
+    strategy: "remote_first"             # remote_first, local_only, or omit
+
+    # Remote-first strategy
+    remote:
+      command: 'bash -c "$(curl ...)"'
+      timeout: 180s
+    local:
+      command: "bash ./external/tool/install.sh"
+      timeout: 180s
+
+    # OR: .zshrc editing
+    zshrc_lines:
+      - comment: "# Comment"
+        content: "export FOO=bar"
+
+    # OR: Interactive prompt
+    prompt:
+      message: "Enter API key:"
+      env_var: "MY_API_KEY"
+      add_to: "$HOME/.zshrc"
+      format: 'export MY_API_KEY="{value}"'
+      skip_if_set: true
+
+    # Verification
+    verify:
+      - command: "test -f ~/.config/tool.conf"
+      - env_var: "MY_API_KEY"
+      - file_exists: "$HOME/.config/tool.conf"
+      - file_contains:
+          path: "$HOME/.zshrc"
+          text: "export FOO"
+
+    optional: true                       # Optional task
+    interactive: true                    # Requires user interaction
 ```
 
 ### Updating Dependencies
@@ -692,6 +906,7 @@ make test
 - **State in ~/.local/**: Never modifies system directories
 - **Idempotent**: Safe to re-run all operations
 - **Version locking**: Ensures consistency across machines
+- **Embedded configs**: Binary works standalone without external files
 
 ---
 
@@ -749,9 +964,15 @@ Before committing ANY code change, verify:
 2. **Package managers are STRICTLY enforced** - only pnpm, uv, go mod
 3. **Documentation is MANDATORY** - file, function, inline comments
 4. **Testing is NON-NEGOTIABLE** - test everything, >80% coverage
-5. **Three-stage progressive setup** - productive in 5 minutes
-6. **Parallel execution** - maximize speed with goroutines
-7. **Version locking** - Brewfile.lock.json + versions.lock
-8. **Self-updating** - binary updates via GitHub releases
-9. **Go best practices** - proper error handling, clean code
-10. **CI/CD automated** - tests, builds, releases all automated
+5. **Install → Setup → Verify workflow** - clean separation of concerns
+6. **Idempotent installation** - check before install, never reinstall
+7. **Dependency resolution** - topological sort ensures correct order
+8. **Parallel execution** - maximize speed with goroutines within groups
+9. **Remote-first with local fallback** - latest version with offline capability
+10. **Git submodules** - version-locked external dependencies
+11. **Accurate verification** - no false positives from stale state
+12. **Binary in ~/.local/bin** - user-level installation, on PATH permanently
+13. **Self-updating** - binary updates via GitHub releases
+14. **Embedded configs** - binary works standalone (tools.yaml, setup.yaml embedded)
+15. **Go best practices** - proper error handling, clean code, interface-based testing
+16. **CI/CD automated** - tests, builds, releases all automated
