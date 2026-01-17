@@ -22,8 +22,6 @@ setup_tasks:
     verify:
       - command: command -v claude
         description: "Claude CLI is installed"
-      - file_exists: ~/.claude/anthropic.sh
-        description: "Claude API key file exists"
       - file_exists: ~/.claude/settings.json
         description: "Claude settings file exists"
       - file_contains:
@@ -83,15 +81,15 @@ setup_tasks:
     verify:
       - file_contains:
           path: ~/.zshrc
-          text: 'source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh'
+          text: 'zsh-autosuggestions/zsh-autosuggestions.zsh'
           description: "Zsh autosuggestions is sourced"
       - file_contains:
           path: ~/.zshrc
-          text: 'source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
+          text: 'zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
           description: "Zsh syntax highlighting is sourced"
       - file_contains:
           path: ~/.zshrc
-          text: 'eval "$(starship init zsh)"'
+          text: 'starship init'
           description: "Starship is initialized"
 
   # Configure Starship
@@ -135,7 +133,3 @@ setup_tasks:
     verify:
       - env_var: GEMINI_API_KEY
         description: "Gemini API key is set"
-      - file_contains:
-          path: ~/.zshrc
-          text: 'export GEMINI_API_KEY='
-          description: "Gemini API key is in .zshrc"

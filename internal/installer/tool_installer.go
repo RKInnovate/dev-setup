@@ -173,6 +173,12 @@ func (ti *ToolInstaller) installTool(tool config.Tool) error {
 	// Check if already installed
 	if ti.isToolInstalled(tool) {
 		ti.ui.Info("✓ %s (already installed)", tool.Name)
+
+		// Still update state with current version info
+		if !ti.dryRun {
+			version, path := ti.getToolInfo(tool)
+			config.MarkToolInstalled(ti.state, tool.Name, version, path)
+		}
 		return nil
 	}
 

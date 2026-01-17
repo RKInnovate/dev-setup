@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/rkinnovate/dev-setup/internal/config"
@@ -43,6 +44,31 @@ func NewVerifier(toolsConfig *config.ToolsConfig, setupConfig *config.SetupConfi
 		state:       state,
 		ui:          ui,
 	}
+}
+
+// expandPath expands ~ and environment variables in a path
+// What: Converts ~/ to $HOME/ and expands $VAR and ${VAR} syntax
+// Why: Config files use ~ but Go doesn't expand it
+// Params: path - path that may contain ~ or env vars
+// Returns: Expanded absolute path
+func expandPath(path string) string {
+	// Expand environment variables first
+	path = os.ExpandEnv(path)
+
+	// Expand tilde
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			path = filepath.Join(home, path[2:])
+		}
+	} else if path == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			path = home
+		}
+	}
+
+	return path
 }
 
 // VerifyAll verifies all tools and setup tasks
@@ -135,13 +161,13 @@ func (v *Verifier) runVerifyCheck(check config.VerifyCheck) bool {
 	}
 
 	if check.FileExists != "" {
-		path := os.ExpandEnv(check.FileExists)
+		path := expandPath(check.FileExists)
 		_, err := os.Stat(path)
 		return err == nil
 	}
 
 	if check.FileContains != nil {
-		path := os.ExpandEnv(check.FileContains.Path)
+		path := expandPath(check.FileContains.Path)
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return false
