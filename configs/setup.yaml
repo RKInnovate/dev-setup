@@ -34,16 +34,22 @@ setup_tasks:
     description: "Configure git settings, aliases, and conventions"
     strategy: remote_first
     remote:
-      command: sh -c "$(curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh)"
+      command: bash -c "$(curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh)" -- --yes --setup-shell
       timeout: 180s
     local:
-      command: sh ./external/git-config/install.sh
+      command: bash ./external/git-config/install.sh --yes --setup-shell
       timeout: 180s
     interactive: true
     optional: true
     verify:
       - file_exists: ~/.gitconfig
         description: "Git configuration file exists"
+      - file_exists: ~/.config/git/git_shortcut.zsh
+        description: "Git shortcuts file exists"
+      - file_contains:
+          path: ~/.zshrc
+          text: 'git_shortcut'
+          description: "Git shortcuts sourced in .zshrc"
 
   # Zsh Plugin: Syntax Highlighting
   - name: zsh-syntax-highlighting
